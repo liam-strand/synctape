@@ -189,6 +189,16 @@ Future improvements:
 - Using multiple metadata sources
 - Machine learning for better matching
 
+### Database Seeding
+
+The local D1 database can be seeded with sample data for development and testing. The seed data includes two users (`alice` and `bob`), playlists, and tracks by Vulfpeck.
+
+To seed the database, run the following command:
+```bash
+pnpm run seedLocalD1
+```
+This command applies all migrations, including the seed data migration file.
+
 ### Rate Limiting
 
 Streaming service APIs have rate limits. Consider:
