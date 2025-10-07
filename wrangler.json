@@ -12,5 +12,11 @@
   ],
   "observability": {
     "enabled": true
-  }
+  },
+  "routes": [
+    {
+      "pattern": "synctape.ltrs.xyz",
+      "zone_name": "ltrs.xyz"
+    }
+  ]
 }
