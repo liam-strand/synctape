@@ -114,11 +114,12 @@ src/
   
   api/
     share.ts                 # /api/share handler
-    create.ts                # /api/create handler  
+    create.ts                # /api/create handler
     sync.ts                  # /api/sync handler
+    users.ts                 # /api/users and /api/users/me handlers
   
   utils/
-    auth.ts                  # Authentication utilities (stubbed)
+    auth.ts                  # JWT Authentication middleware
     trackMatching.ts         # Track matching logic
     types.ts                 # Shared TypeScript types
 
@@ -156,6 +157,25 @@ pnpm run dev
 pnpm run deploy
 ```
 
+### JWT Secret
+
+This project uses JSON Web Tokens (JWT) for user authentication. A secret key is required to sign and verify these tokens. A default, insecure key is provided in `wrangler.json` for local development.
+
+For production, you **must** generate a strong, unique secret. You can generate a secure secret using the following command:
+
+```bash
+openssl rand -base64 32
+```
+
+Once you have your secret, you need to set it as an environment variable in your Cloudflare Worker's settings.
+
+1. Go to your Worker in the Cloudflare dashboard.
+2. Navigate to **Settings** > **Variables**.
+3. Under **Environment Variables**, click **Add variable**.
+4. Set the variable name to `JWT_SECRET` and paste your generated secret as the value.
+5. Make sure to **Encrypt** the secret for security.
+6. Click **Save**.
+
 ## TODO / Stubbed Features
 
 - [ ] **Authentication**: Implement proper OAuth flows for user authentication
@@ -165,17 +185,16 @@ pnpm run deploy
 - [ ] **Token Refresh**: Implement OAuth token refresh logic
 - [ ] **Rate Limiting**: Add rate limiting to respect API quotas
 - [ ] **Webhooks**: Add support for playlist change webhooks from services
-- [ ] **User Management**: Add user registration and profile management
+- [x] **User Management**: Add user registration and profile management
 - [ ] **Permissions**: Implement role-based access control for playlists
 
 ## Development Notes
 
-### Authentication (Stubbed)
+### Authentication
 
-Currently, authentication is stubbed using a simple `X-User-Id` header. In production, this should be replaced with:
-- OAuth 2.0 for user authentication
-- JWT tokens for session management
-- Proper token validation and refresh
+Authentication is handled via JSON Web Tokens (JWT). Users can register and log in via the `/api/users` endpoint to receive a token. This token must be sent in the `Authorization: Bearer <token>` header for all protected endpoints.
+
+The JWT implementation uses the `hono/jwt` library and is configured with a `JWT_SECRET` environment variable.
 
 ### Track Matching
 
