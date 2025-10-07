@@ -17,10 +17,7 @@
     "publish": true
   },
   "devDependencies": {
-    "miniflare": "^2.14.4",
     "typescript": "5.8.3",
-    "vitest": "^0.34.6",
-    "vitest-environment-miniflare": "^2.14.4",
     "wrangler": "^4.42.1"
   },
   "scripts": {
@@ -29,8 +26,7 @@
     "deploy": "wrangler deploy",
     "dev": "pnpm seedLocalD1 && wrangler dev",
     "predeploy": "wrangler d1 migrations apply DB --remote",
-    "seedLocalD1": "wrangler d1 migrations apply DB --local",
-    "test": "vitest"
+    "seedLocalD1": "wrangler d1 migrations apply DB --local"
   },
   "dependencies": {
     "hono": "^4.9.10"

@@ -1,32 +1,46 @@
 import { Database } from '../db/queries';
 import { ServiceFactory } from '../services/ServiceFactory';
-import { requireAuth, getAccessToken } from '../utils/auth';
 import { getTrackServiceId, filterTracksForService } from '../utils/trackMatching';
 import { StreamingServiceType } from '../utils/types';
 
+// Temporary helper to get user ID from header for backward compatibility
+async function getUserIdFromRequest(request: Request): Promise<number> {
+  const authHeader = request.headers.get('X-User-Id');
+  if (!authHeader) {
+    // For the new JWT-based auth, the Authorization header should be used.
+    // This is a temporary fallback for older handlers.
+    // In a real app, you would migrate this to use the JWT middleware.
+    throw new Error('Unauthorized');
+  }
+  const userId = parseInt(authHeader, 10);
+  if (isNaN(userId)) {
+    throw new Error('Unauthorized: Invalid User ID format');
+  }
+  return userId;
+}
+
+// Temporary helper to get access token, moved from the old auth.ts
+async function getAccessToken(
+  db: D1Database,
+  userId: number,
+  service: string
+): Promise<string | null> {
+  const result = await db
+    .prepare('SELECT access_token FROM user_streaming_accounts WHERE user_id = ? AND service = ?')
+    .bind(userId, service)
+    .first<{ access_token: string }>();
+  return result?.access_token ?? null;
+}
+
 /**
  * POST /api/create
- * 
+ *
  * Creates a playlist on the specified streaming service and syncs it with our database playlist.
- * 
- * Request body:
- * {
- *   "playlistId": number,  // Our internal playlist ID
- *   "service": "spotify" | "apple_music" | "youtube_music"
- * }
- * 
- * Response:
- * {
- *   "success": true,
- *   "servicePlaylistId": string,  // The service-specific playlist ID
- *   "trackCount": number,
- *   "skippedTracks": number  // Tracks not available on this service
- * }
  */
 export async function handleCreate(request: Request, env: Env): Promise<Response> {
   try {
-    // Authenticate the user
-    const auth = await requireAuth(request);
+    // Authenticate the user using the temporary header-based method
+    const userId = await getUserIdFromRequest(request);
 
     // Parse request body
     const body = await request.json() as {
@@ -57,7 +71,7 @@ export async function handleCreate(request: Request, env: Env): Promise<Response
 
     // Check if a link already exists for this service
     const existingLinks = await db.getPlaylistLinks(playlistId);
-    const existingLink = existingLinks.find(link => link.service === service && link.user_id === auth.userId);
+    const existingLink = existingLinks.find(link => link.service === service && link.user_id === userId);
     
     if (existingLink) {
       return new Response(JSON.stringify({ error: `Playlist already exists on ${service}` }), {
@@ -67,7 +81,7 @@ export async function handleCreate(request: Request, env: Env): Promise<Response
     }
 
     // Get the user's access token for this service
-    const accessToken = await getAccessToken(env.DB, auth.userId, service);
+    const accessToken = await getAccessToken(env.DB, userId, service);
     
     if (!accessToken) {
       return new Response(JSON.stringify({ error: `No ${service} account connected` }), {
@@ -102,7 +116,7 @@ export async function handleCreate(request: Request, env: Env): Promise<Response
     }
 
     // Create the playlist link in our database
-    await db.createPlaylistLink(playlistId, auth.userId, service, servicePlaylistId, false);
+    await db.createPlaylistLink(playlistId, userId, service, servicePlaylistId, false);
 
     return new Response(
       JSON.stringify({
