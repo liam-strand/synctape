@@ -6,12 +6,17 @@
   "d1_databases": [
     {
       "binding": "DB",
-      "database_id": "0ada0663-ecf8-448f-8b73-490c07847c49",
+      "database_id": "c6b989d1-c5f2-4151-8808-4fd833e9d22d",
       "database_name": "synctape-database"
     }
   ],
   "observability": {
     "enabled": true
+  },
+  "triggers": {
+    "crons": [
+      "*/30 * * * *"
+    ]
   },
   "routes": [
     {

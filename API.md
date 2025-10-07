@@ -1,0 +1,279 @@
+# Synctape API Documentation
+
+## Authentication
+
+All API endpoints require authentication via the `X-User-Id` header (stubbed for now).
+
+**Example:**
+```bash
+curl -X POST https://synctape.ltrs.xyz/api/share \
+  -H "Content-Type: application/json" \
+  -H "X-User-Id: 1" \
+  -d '{"service":"spotify","playlistId":"37i9dQZF1DXcBWIGoYBM5M"}'
+```
+
+## Endpoints
+
+### POST /api/share
+
+Import a playlist from a streaming service into Synctape.
+
+**Request Body:**
+```typescript
+{
+  service: "spotify" | "apple_music" | "youtube_music";
+  playlistId: string;  // Service-specific playlist ID
+  playlistUrl?: string; // Optional full URL (can parse from this instead)
+}
+```
+
+**Response (200 OK):**
+```typescript
+{
+  playlistId: number;  // Internal Synctape playlist ID
+  name: string;
+  trackCount: number;
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Missing required fields
+- `401 Unauthorized`: Missing or invalid authentication
+- `403 Forbidden`: User hasn't connected their account for this service
+- `500 Internal Server Error`: Service API failure
+
+**Example:**
+```bash
+curl -X POST https://synctape.ltrs.xyz/api/share \
+  -H "Content-Type: application/json" \
+  -H "X-User-Id: 1" \
+  -d '{
+    "service": "spotify",
+    "playlistId": "37i9dQZF1DXcBWIGoYBM5M"
+  }'
+```
+
+**Notes:**
+- This endpoint is idempotent
+- The requesting user becomes the owner of the imported playlist
+- The source playlist is marked in the database
+
+---
+
+### POST /api/create
+
+Create a playlist on a streaming service from a Synctape playlist.
+
+**Request Body:**
+```typescript
+{
+  playlistId: number;  // Internal Synctape playlist ID
+  service: "spotify" | "apple_music" | "youtube_music";
+}
+```
+
+**Response (200 OK):**
+```typescript
+{
+  success: true;
+  servicePlaylistId: string;  // ID on the streaming service
+  trackCount: number;  // Number of tracks added
+  skippedTracks: number;  // Tracks not available on this service
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Missing required fields
+- `401 Unauthorized`: Missing or invalid authentication
+- `403 Forbidden`: User hasn't connected their account for this service
+- `404 Not Found`: Playlist doesn't exist
+- `409 Conflict`: Playlist already exists on this service for this user
+- `500 Internal Server Error`: Service API failure
+
+**Example:**
+```bash
+curl -X POST https://synctape.ltrs.xyz/api/create \
+  -H "Content-Type: application/json" \
+  -H "X-User-Id: 1" \
+  -d '{
+    "playlistId": 42,
+    "service": "apple_music"
+  }'
+```
+
+**Notes:**
+- Only creates on the specified service
+- Tracks not available on the service are skipped
+- A link is created between the Synctape playlist and service playlist
+
+---
+
+### POST /api/sync
+
+Synchronize a playlist across all linked streaming services.
+
+**Request Body:**
+```typescript
+{
+  playlistId: number;  // Internal Synctape playlist ID
+}
+```
+
+**Response (200 OK):**
+```typescript
+{
+  success: true;
+  trackCount: number;  // Total tracks after sync
+  syncedServices: string[];  // Services successfully synced
+  errors?: Array<{  // Optional: services that failed
+    service: string;
+    error: string;
+  }>;
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Missing required field or no linked services
+- `404 Not Found`: Playlist doesn't exist
+- `500 Internal Server Error`: All services failed to sync
+
+**Example:**
+```bash
+curl -X POST https://synctape.ltrs.xyz/api/sync \
+  -H "Content-Type: application/json" \
+  -d '{
+    "playlistId": 42
+  }'
+```
+
+**Notes:**
+- Uses last-write-wins strategy based on `last_synced_at` timestamps
+- Fetches from all linked services, determines most recent
+- Updates database with latest version
+- Propagates changes to all other linked services
+- Partial failures are reported in the `errors` array
+
+**Sync Strategy:**
+1. Fetch playlist from all linked services
+2. Compare `last_synced_at` timestamps
+3. Use the most recently updated version as source
+4. Update Synctape database
+5. Push changes to all other services
+
+---
+
+### GET /health
+
+Health check endpoint.
+
+**Response (200 OK):**
+```typescript
+{
+  status: "ok"
+}
+```
+
+**Example:**
+```bash
+curl https://synctape.ltrs.xyz/health
+```
+
+---
+
+## Cron Triggers
+
+The `/api/sync` endpoint is automatically called every 30 minutes by Cloudflare Cron Triggers to keep all playlists synchronized.
+
+**Current Strategy:**
+- Syncs playlists that haven't been synced in the last 24 hours
+- Processes up to 100 playlists per cron run
+- Runs every 30 minutes
+
+---
+
+## Streaming Service Support
+
+### Supported Services
+- Spotify (stubbed)
+- Apple Music (stubbed)
+- YouTube Music (planned)
+
+### Service-Specific Notes
+
+#### Spotify
+- Uses Spotify Web API
+- Requires OAuth 2.0 authentication
+- Rate limit: ~180 requests per minute
+- Track IDs are in format: `spotify:track:ID` or just `ID`
+
+#### Apple Music
+- Uses Apple Music API
+- Requires Apple Music subscription and developer token
+- Rate limits vary by endpoint
+- Track IDs are in format: `i.123456`
+
+#### YouTube Music
+- Not yet implemented
+- Will use YouTube Music API or ytmusicapi
+
+---
+
+## Error Handling
+
+All endpoints return JSON error responses:
+
+```typescript
+{
+  error: string;  // Human-readable error message
+  details?: any;  // Optional additional error details
+}
+```
+
+**Common HTTP Status Codes:**
+- `200 OK`: Success
+- `400 Bad Request`: Invalid request parameters
+- `401 Unauthorized`: Authentication required
+- `403 Forbidden`: Insufficient permissions
+- `404 Not Found`: Resource doesn't exist
+- `409 Conflict`: Resource already exists
+- `500 Internal Server Error`: Server-side error
+
+---
+
+## CORS
+
+All endpoints support CORS with the following headers:
+- `Access-Control-Allow-Origin: *`
+- `Access-Control-Allow-Methods: GET, POST, OPTIONS`
+- `Access-Control-Allow-Headers: Content-Type, X-User-Id`
+
+---
+
+## Rate Limits
+
+Currently no rate limits are enforced on the Synctape API. Future versions will implement:
+- Per-user rate limiting
+- IP-based rate limiting
+- Graceful handling of streaming service rate limits
+
+---
+
+## Future Endpoints (Planned)
+
+### GET /api/playlists
+List all playlists for the authenticated user.
+
+### GET /api/playlist/:id
+Get details about a specific playlist.
+
+### DELETE /api/playlist/:id
+Delete a playlist (owner only).
+
+### POST /api/playlist/:id/tracks
+Add tracks to a playlist.
+
+### DELETE /api/playlist/:id/tracks
+Remove tracks from a playlist.
+
+### GET /api/search
+Search for tracks across services.

@@ -1,0 +1,198 @@
+import { Database } from '../db/queries';
+import { ServiceFactory } from '../services/ServiceFactory';
+import { getAccessToken } from '../utils/auth';
+import { matchOrCreateTrack, getTrackServiceId, filterTracksForService } from '../utils/trackMatching';
+import { Track, PlaylistLink } from '../utils/types';
+
+/**
+ * POST /api/sync
+ * 
+ * Syncs a playlist across all linked streaming services using last-write-wins strategy.
+ * 
+ * This endpoint:
+ * 1. Fetches the latest version from all linked streaming services
+ * 2. Merges them using last-write-wins based on last_synced_at timestamps
+ * 3. Writes the merged version to our database
+ * 4. Propagates changes to all linked streaming services
+ * 
+ * Request body:
+ * {
+ *   "playlistId": number  // Our internal playlist ID
+ * }
+ * 
+ * Response:
+ * {
+ *   "success": true,
+ *   "trackCount": number,
+ *   "syncedServices": string[],
+ *   "errors": { service: string, error: string }[]
+ * }
+ */
+export async function handleSync(request: Request, env: Env): Promise<Response> {
+  try {
+    // Parse request body
+    const body = await request.json() as {
+      playlistId: number;
+    };
+
+    const { playlistId } = body;
+
+    if (!playlistId) {
+      return new Response(JSON.stringify({ error: 'Missing required field: playlistId' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    const db = new Database(env.DB);
+
+    // Get the playlist
+    const playlist = await db.getPlaylistById(playlistId);
+    
+    if (!playlist) {
+      return new Response(JSON.stringify({ error: 'Playlist not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Get all linked services for this playlist
+    const links = await db.getPlaylistLinks(playlistId);
+
+    if (links.length === 0) {
+      return new Response(JSON.stringify({ error: 'No linked services found for this playlist' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Fetch latest data from all services and determine which is most recent
+    let mostRecentLink: PlaylistLink | null = null;
+    let mostRecentData: any = null;
+    const errors: Array<{ service: string; error: string }> = [];
+
+    for (const link of links) {
+      try {
+        const accessToken = await getAccessToken(env.DB, link.user_id, link.service);
+        
+        if (!accessToken) {
+          errors.push({ service: link.service, error: 'No access token available' });
+          continue;
+        }
+
+        const streamingService = ServiceFactory.getService(link.service);
+        const playlistData = await streamingService.fetchPlaylist(link.service_playlist_id, accessToken);
+
+        // Compare timestamps (last-write-wins)
+        const linkTimestamp = link.last_synced_at || 0;
+        const mostRecentTimestamp = mostRecentLink?.last_synced_at || 0;
+
+        if (!mostRecentLink || linkTimestamp > mostRecentTimestamp) {
+          mostRecentLink = link;
+          mostRecentData = { ...playlistData, link };
+        }
+
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        errors.push({ service: link.service, error: errorMessage });
+      }
+    }
+
+    if (!mostRecentLink || !mostRecentData) {
+      return new Response(
+        JSON.stringify({ error: 'Failed to fetch data from any service', errors }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
+    // Update our database with the most recent version
+    const trackIds: number[] = [];
+    
+    for (const trackMetadata of mostRecentData.tracks) {
+      // TODO: Get service-specific track ID from the API response
+      const serviceTrackId = 'TODO';
+      
+      const trackId = await matchOrCreateTrack(
+        db,
+        trackMetadata,
+        mostRecentLink.service,
+        serviceTrackId
+      );
+      trackIds.push(trackId);
+    }
+
+    // Update playlist tracks
+    await db.setPlaylistTracks(playlistId, trackIds);
+    await db.updatePlaylistSyncTimestamp(playlistId);
+
+    // Get the updated tracks from database
+    const tracks = await db.getPlaylistTracks(playlistId);
+
+    // Propagate to all other services
+    const syncedServices: string[] = [mostRecentLink.service];
+
+    for (const link of links) {
+      // Skip the source we just pulled from
+      if (link.id === mostRecentLink.id) {
+        await db.updatePlaylistLinkSyncTimestamp(link.id);
+        continue;
+      }
+
+      try {
+        const accessToken = await getAccessToken(env.DB, link.user_id, link.service);
+        
+        if (!accessToken) {
+          continue; // Already logged in errors array
+        }
+
+        // Filter tracks for this service
+        const availableTracks = filterTracksForService(tracks, link.service);
+        const serviceTrackIds = availableTracks
+          .map(track => getTrackServiceId(track, link.service))
+          .filter(id => id !== null) as string[];
+
+        // Update the service playlist
+        const streamingService = ServiceFactory.getService(link.service);
+        await streamingService.updatePlaylistTracks(
+          link.service_playlist_id,
+          serviceTrackIds,
+          accessToken
+        );
+
+        // Update sync timestamp
+        await db.updatePlaylistLinkSyncTimestamp(link.id);
+        syncedServices.push(link.service);
+
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        errors.push({ service: link.service, error: `Failed to update: ${errorMessage}` });
+      }
+    }
+
+    return new Response(
+      JSON.stringify({
+        success: true,
+        trackCount: trackIds.length,
+        syncedServices,
+        errors: errors.length > 0 ? errors : undefined,
+      }),
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+
+  } catch (error) {
+    console.error('Error in /api/sync:', error);
+    
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    
+    return new Response(JSON.stringify({ error: errorMessage }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+}

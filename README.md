@@ -1,59 +1,202 @@
-# Worker + D1 Database
+# Synctape
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cloudflare/templates/tree/main/d1-template)
+A collaborative playlist app that allows people to sync playlists across different music streaming services (Spotify, Apple Music, YouTube Music, etc.).
 
-![Worker + D1 Template Preview](https://imagedelivery.net/wSMYJvS3Xw-n339CbDyDIA/cb7cb0a9-6102-4822-633c-b76b7bb25900/public)
+## Architecture
 
-<!-- dash-content-start -->
+### Database Tables
 
-D1 is Cloudflare's native serverless SQL database ([docs](https://developers.cloudflare.com/d1/)). This project demonstrates using a Worker with a D1 binding to execute a SQL statement. A simple frontend displays the result of this query:
+- **users**: User accounts
+- **user_streaming_accounts**: OAuth tokens for each user's connected streaming services
+- **tracks**: Track metadata with service-specific IDs (spotify_id, apple_music_id, etc.)
+- **playlists**: Playlist metadata
+- **playlist_tracks**: Junction table maintaining track order in playlists
+- **playlist_links**: Links between our playlists and service-specific playlist IDs
 
-```SQL
-SELECT * FROM comments LIMIT 3;
+### API Endpoints
+
+#### POST /api/share
+Takes a link to an existing playlist on a streaming service and loads it into the database.
+
+**Request:**
+```json
+{
+  "service": "spotify",
+  "playlistId": "37i9dQZF1DXcBWIGoYBM5M"
+}
 ```
 
-The D1 database is initialized with a `comments` table and this data:
-
-```SQL
-INSERT INTO comments (author, content)
-VALUES
-    ('Kristian', 'Congrats!'),
-    ('Serena', 'Great job!'),
-    ('Max', 'Keep up the good work!')
-;
+**Response:**
+```json
+{
+  "playlistId": 1,
+  "name": "My Playlist",
+  "trackCount": 50
+}
 ```
 
-> [!IMPORTANT]
-> When using C3 to create this project, select "no" when it asks if you want to deploy. You need to follow this project's [setup steps](https://github.com/cloudflare/templates/tree/main/d1-template#setup-steps) before deploying.
+**Features:**
+- Idempotent (calling multiple times won't create duplicates)
+- Creator becomes the owner of the playlist
+- Original playlist is marked as source
 
-<!-- dash-content-end -->
+#### POST /api/create
+Creates a playlist on the specified streaming service and syncs it with our database playlist.
+
+**Request:**
+```json
+{
+  "playlistId": 1,
+  "service": "apple_music"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "servicePlaylistId": "pl.u-abc123",
+  "trackCount": 45,
+  "skippedTracks": 5
+}
+```
+
+**Features:**
+- Only creates on the requested service
+- Skips tracks not available on the target service
+- Links the service playlist to our database
+
+#### POST /api/sync
+Syncs a playlist across all linked streaming services.
+
+**Request:**
+```json
+{
+  "playlistId": 1
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "trackCount": 50,
+  "syncedServices": ["spotify", "apple_music"],
+  "errors": []
+}
+```
+
+**Sync Strategy:**
+- Uses last-write-wins based on `last_synced_at` timestamps
+- Fetches latest from all services
+- Determines most recent version
+- Updates database
+- Propagates to all other services
+
+### Cron Job
+
+The `/api/sync` endpoint is also triggered automatically every 30 minutes via Cloudflare Cron Triggers to keep playlists in sync.
+
+## Project Structure
+
+```
+src/
+  index.ts                    # Main Worker entry point with routing
+  
+  services/
+    StreamingService.ts       # Interface definition
+    SpotifyService.ts         # Spotify implementation (stubbed)
+    AppleMusicService.ts      # Apple Music implementation (stubbed)
+    ServiceFactory.ts         # Factory to get service by name
+  
+  db/
+    queries.ts               # D1 database query utilities
+  
+  api/
+    share.ts                 # /api/share handler
+    create.ts                # /api/create handler  
+    sync.ts                  # /api/sync handler
+  
+  utils/
+    auth.ts                  # Authentication utilities (stubbed)
+    trackMatching.ts         # Track matching logic
+    types.ts                 # Shared TypeScript types
+
+migrations/
+  0001_create_comments_table.sql  # Database schema
+```
 
 ## Getting Started
 
-Outside of this repo, you can start a new project with this template using [C3](https://developers.cloudflare.com/pages/get-started/c3/) (the `create-cloudflare` CLI):
+### Prerequisites
 
+- Node.js and pnpm
+- Cloudflare account with Workers and D1 enabled
+- Wrangler CLI
+
+### Setup
+
+1. Install dependencies:
+```bash
+pnpm install
 ```
-npm create cloudflare@latest -- --template=cloudflare/templates/d1-template
+
+2. Apply database migrations:
+```bash
+pnpm run seedLocalD1
 ```
 
-A live public deployment of this template is available at [https://d1-template.templates.workers.dev](https://d1-template.templates.workers.dev)
+3. Run locally:
+```bash
+pnpm run dev
+```
 
-## Setup Steps
+4. Deploy to Cloudflare:
+```bash
+pnpm run deploy
+```
 
-1. Install the project dependencies with a package manager of your choice:
-   ```bash
-   npm install
-   ```
-2. Create a [D1 database](https://developers.cloudflare.com/d1/get-started/) with the name "d1-template-database":
-   ```bash
-   npx wrangler d1 create d1-template-database
-   ```
-   ...and update the `database_id` field in `wrangler.json` with the new database ID.
-3. Run the following db migration to initialize the database (notice the `migrations` directory in this project):
-   ```bash
-   npx wrangler d1 migrations apply --remote d1-template-database
-   ```
-4. Deploy the project!
-   ```bash
-   npx wrangler deploy
-   ```
+## TODO / Stubbed Features
+
+- [ ] **Authentication**: Implement proper OAuth flows for user authentication
+- [ ] **Streaming Service APIs**: Complete Spotify, Apple Music, and YouTube Music API integrations
+- [ ] **Track Matching**: Implement fuzzy matching for tracks not found by ISRC
+- [ ] **Service-specific Track IDs**: Update API responses to include track IDs from services
+- [ ] **Token Refresh**: Implement OAuth token refresh logic
+- [ ] **Rate Limiting**: Add rate limiting to respect API quotas
+- [ ] **Webhooks**: Add support for playlist change webhooks from services
+- [ ] **User Management**: Add user registration and profile management
+- [ ] **Permissions**: Implement role-based access control for playlists
+
+## Development Notes
+
+### Authentication (Stubbed)
+
+Currently, authentication is stubbed using a simple `X-User-Id` header. In production, this should be replaced with:
+- OAuth 2.0 for user authentication
+- JWT tokens for session management
+- Proper token validation and refresh
+
+### Track Matching
+
+Track matching currently works by:
+1. Checking service-specific ID
+2. Falling back to ISRC matching
+3. Creating a new track if not found
+
+Future improvements:
+- Fuzzy matching by name/artist/album
+- Using multiple metadata sources
+- Machine learning for better matching
+
+### Rate Limiting
+
+Streaming service APIs have rate limits. Consider:
+- Batching operations
+- Implementing exponential backoff
+- Caching frequently accessed data
+- Using service webhooks when available
+
+## License
+
+MIT
