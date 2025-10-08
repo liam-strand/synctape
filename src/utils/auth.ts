@@ -130,7 +130,10 @@ export async function validateRefreshToken(
   env: Env,
   token: string,
 ): Promise<{ userId: number; tokenHash: string }> {
-  const payload = (await verify(token, getRefreshSecret(env))) as RefreshTokenPayload;
+  const payload = (await verify(
+    token,
+    getRefreshSecret(env),
+  )) as RefreshTokenPayload;
 
   if (payload.type !== "refresh" || typeof payload.userId !== "number") {
     throw new Error("Invalid refresh token");
@@ -143,7 +146,12 @@ export async function validateRefreshToken(
      WHERE token_hash = ?`,
   )
     .bind(tokenHash)
-    .first<{ id: number; user_id: number; expires_at: number; revoked_at: number | null }>();
+    .first<{
+      id: number;
+      user_id: number;
+      expires_at: number;
+      revoked_at: number | null;
+    }>();
 
   if (!record) {
     throw new Error("Refresh token not recognized");
@@ -170,7 +178,10 @@ export async function issueTokenPair(
   options?: { revokeTokenHash?: string },
 ): Promise<TokenPair> {
   const accessToken = await generateAccessToken(env, userId);
-  const { token: refreshToken, expiresAt } = await generateRefreshToken(env, userId);
+  const { token: refreshToken, expiresAt } = await generateRefreshToken(
+    env,
+    userId,
+  );
 
   if (options?.revokeTokenHash) {
     await env.DB.prepare(
@@ -191,7 +202,6 @@ export async function issueTokenPair(
     refreshTokenExpiresAt: expiresAt,
   };
 }
-
 
 export async function getServiceAccessToken(
   env: Env,
@@ -230,7 +240,10 @@ export async function getServiceAccessToken(
   try {
     switch (service) {
       case "spotify": {
-        const refreshed = await refreshSpotifyAccessToken(env, record.refresh_token);
+        const refreshed = await refreshSpotifyAccessToken(
+          env,
+          record.refresh_token,
+        );
         const newExpiresAt = now + refreshed.expiresIn;
 
         await db

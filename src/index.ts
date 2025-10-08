@@ -41,6 +41,11 @@ app.get("/api/spotify/oauth-url", authMiddleware, handleSpotifyOAuthUrl);
 app.get("/auth/spotify", handleSpotifyRedirect);
 app.get("/auth/spotify/callback", handleSpotifyCallback);
 
+// Connection Landing Pages
+app.get("/connect/spotify/success", (c) => {
+  return c.text("Spotify Connected!");
+});
+
 // Health check endpoint
 app.get("/health", (c) => {
   return c.json({ status: "ok" });

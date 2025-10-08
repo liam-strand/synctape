@@ -19,13 +19,10 @@ export async function handleCreate(
 ): Promise<Response> {
   try {
     if (!userId) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        {
-          status: 401,
-          headers: { "Content-Type": "application/json" },
-        },
-      );
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     // Parse request body
@@ -87,7 +84,12 @@ export async function handleCreate(
     }
 
     // Get the user's access token for this service
-    const accessToken = await getServiceAccessToken(env, env.DB, userId, service);
+    const accessToken = await getServiceAccessToken(
+      env,
+      env.DB,
+      userId,
+      service,
+    );
 
     if (!accessToken) {
       return new Response(

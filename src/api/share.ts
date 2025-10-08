@@ -46,7 +46,12 @@ export async function handleShare(
     const db = new Database(env.DB);
 
     // Get the user's access token for this service
-    const accessToken = await getServiceAccessToken(env, env.DB, userId, service);
+    const accessToken = await getServiceAccessToken(
+      env,
+      env.DB,
+      userId,
+      service,
+    );
 
     if (!accessToken) {
       return new Response(

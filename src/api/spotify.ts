@@ -72,7 +72,9 @@ function buildDefaultReturnUrl(context: WorkerContext, path?: string): string {
   return url.toString();
 }
 
-export async function handleSpotifyOAuthUrl(context: AuthedContext): Promise<Response> {
+export async function handleSpotifyOAuthUrl(
+  context: AuthedContext,
+): Promise<Response> {
   const payload = context.get("jwtPayload");
   const requestUrl = new URL(context.req.url);
   const rawReturnTo = requestUrl.searchParams.get("returnTo");
@@ -89,7 +91,9 @@ export async function handleSpotifyOAuthUrl(context: AuthedContext): Promise<Res
   });
 }
 
-export async function handleSpotifyRedirect(context: WorkerContext): Promise<Response> {
+export async function handleSpotifyRedirect(
+  context: WorkerContext,
+): Promise<Response> {
   const requestUrl = new URL(context.req.url);
   const state = requestUrl.searchParams.get("state");
 
@@ -119,7 +123,9 @@ export async function handleSpotifyRedirect(context: WorkerContext): Promise<Res
   return Response.redirect(authorizeUrl.toString(), 302);
 }
 
-export async function handleSpotifyCallback(context: WorkerContext): Promise<Response> {
+export async function handleSpotifyCallback(
+  context: WorkerContext,
+): Promise<Response> {
   const requestUrl = new URL(context.req.url);
   const code = requestUrl.searchParams.get("code");
   const state = requestUrl.searchParams.get("state");
@@ -155,14 +161,14 @@ export async function handleSpotifyCallback(context: WorkerContext): Promise<Res
     const now = Math.floor(Date.now() / 1000);
     const tokenExpiresAt = now + expiresIn;
 
-    const existing = await context.env.DB
-      .prepare(
-        "SELECT refresh_token FROM user_streaming_accounts WHERE user_id = ? AND service = ?",
-      )
+    const existing = await context.env.DB.prepare(
+      "SELECT refresh_token FROM user_streaming_accounts WHERE user_id = ? AND service = ?",
+    )
       .bind(stateData.userId, "spotify")
       .first<{ refresh_token: string | null }>();
 
-    const refreshToken = tokenResponse.refresh_token ?? existing?.refresh_token ?? null;
+    const refreshToken =
+      tokenResponse.refresh_token ?? existing?.refresh_token ?? null;
 
     const profileResponse = await fetch("https://api.spotify.com/v1/me", {
       headers: {
@@ -179,16 +185,15 @@ export async function handleSpotifyCallback(context: WorkerContext): Promise<Res
 
     const profile = (await profileResponse.json()) as SpotifyProfileResponse;
 
-    await context.env.DB
-      .prepare(
-        `INSERT INTO user_streaming_accounts (user_id, service, service_user_id, access_token, refresh_token, token_expires_at)
+    await context.env.DB.prepare(
+      `INSERT INTO user_streaming_accounts (user_id, service, service_user_id, access_token, refresh_token, token_expires_at)
          VALUES (?, ?, ?, ?, ?, ?)
          ON CONFLICT(user_id, service) DO UPDATE SET
            service_user_id = excluded.service_user_id,
            access_token = excluded.access_token,
            refresh_token = excluded.refresh_token,
            token_expires_at = excluded.token_expires_at`,
-      )
+    )
       .bind(
         stateData.userId,
         "spotify",

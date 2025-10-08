@@ -14,7 +14,7 @@ const users = new Hono<{
     JWT_SECRET: string;
     JWT_REFRESH_SECRET: string;
     SPOTIFY_CLIENT_ID: string;
-		SPOTIFY_CLIENT_SECRET: string;
+    SPOTIFY_CLIENT_SECRET: string;
   };
   Variables: {
     jwtPayload: AuthPayload;
@@ -100,7 +100,10 @@ users.post("/refresh", async (c) => {
   }
 
   try {
-    const { userId, tokenHash } = await validateRefreshToken(c.env, refreshToken);
+    const { userId, tokenHash } = await validateRefreshToken(
+      c.env,
+      refreshToken,
+    );
     const tokens = await issueTokenPair(c.env, userId, {
       revokeTokenHash: tokenHash,
     });

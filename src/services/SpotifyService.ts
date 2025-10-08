@@ -127,7 +127,10 @@ export async function parseSpotifyState(
 ): Promise<{ userId: number; returnTo?: string }> {
   const payload = (await verify(state, env.JWT_SECRET)) as SpotifyStatePayload;
 
-  if (payload.purpose !== "spotify_oauth_state" || typeof payload.userId !== "number") {
+  if (
+    payload.purpose !== "spotify_oauth_state" ||
+    typeof payload.userId !== "number"
+  ) {
     throw new Error("Invalid Spotify state token");
   }
 

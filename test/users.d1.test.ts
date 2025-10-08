@@ -45,7 +45,10 @@ describe("users API (real D1)", () => {
   it("POST /api/users/refresh rotates refresh token and returns new pair", async () => {
     const loginRes = await SELF.fetch("https://synctape.ltrs.xyz/api/users", {
       method: "POST",
-      body: JSON.stringify({ email: "refresh@example.com", username: "refresh" }),
+      body: JSON.stringify({
+        email: "refresh@example.com",
+        username: "refresh",
+      }),
       headers: { "Content-Type": "application/json" },
     });
 
