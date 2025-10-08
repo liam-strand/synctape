@@ -191,13 +191,29 @@ Configure the variables in the Cloudflare dashboard (Worker **Settings → Varia
 
 Refresh tokens are hashed and persisted in the `user_refresh_tokens` table to support rotation and revocation.
 
+### Spotify OAuth
+
+Synctape now supports connecting Spotify accounts through the Worker. Configure the following variables:
+
+- `SPOTIFY_CLIENT_ID` (string, already included in `wrangler.jsonc`)
+- `SPOTIFY_CLIENT_SECRET` (secret value set via `wrangler secret put`)
+
+**Connect flow**
+
+1. Authenticate the user and request `GET /api/spotify/oauth-url` with their bearer token. Optionally pass `?returnTo=/your/path` to control the post-connection redirect.
+2. The response returns a one-time Worker URL. Redirect the user's browser to it to kick off OAuth.
+3. The Worker forwards the user to Spotify's consent screen and handles the `/auth/spotify/callback` exchange.
+4. Access and refresh tokens are stored in `user_streaming_accounts`. Tokens are automatically refreshed on demand when other APIs ask for Spotify access.
+
+If the optional `returnTo` parameter is omitted, the user is redirected to `/connect/spotify/success` on the Worker origin once the flow completes. The Spotify developer dashboard must list `https://synctape.ltrs.xyz/auth/spotify/callback` as an allowed redirect URI.
+
 ## TODO / Stubbed Features
 
 - [ ] **Authentication**: Implement proper OAuth flows for user authentication
 - [ ] **Streaming Service APIs**: Complete Spotify, Apple Music, and YouTube Music API integrations
 - [ ] **Track Matching**: Implement fuzzy matching for tracks not found by ISRC
 - [ ] **Service-specific Track IDs**: Update API responses to include track IDs from services
-- [ ] **Token Refresh**: Implement OAuth token refresh logic
+- [x] **Token Refresh**: Implement OAuth token refresh logic (Spotify)
 - [ ] **Rate Limiting**: Add rate limiting to respect API quotas
 - [ ] **Webhooks**: Add support for playlist change webhooks from services
 - [x] **User Management**: Add user registration and profile management

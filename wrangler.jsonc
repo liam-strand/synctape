@@ -24,6 +24,7 @@
   ],
   "vars": {
     "JWT_SECRET": "a-secure-secret-key-that-is-at-least-32-characters-long",
-    "JWT_REFRESH_SECRET": "an-even-more-secure-refresh-secret-of-similar-length"
+    "JWT_REFRESH_SECRET": "an-even-more-secure-refresh-secret-of-similar-length",
+    "SPOTIFY_CLIENT_ID": "dfd4495b5dd74d5e958755b13b8ade5f"
   }
 }

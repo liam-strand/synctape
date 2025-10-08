@@ -1,6 +1,8 @@
 import { MiddlewareHandler } from "hono";
 import { sign, verify } from "hono/jwt";
 import type { JWTPayload } from "hono/utils/jwt/types";
+import { StreamingServiceType } from "./types";
+import { refreshSpotifyAccessToken } from "../services/SpotifyService";
 
 const ACCESS_TOKEN_TTL_SECONDS = 60 * 15; // 15 minutes
 const REFRESH_TOKEN_TTL_SECONDS = 60 * 60 * 24 * 14; // 14 days
@@ -188,6 +190,73 @@ export async function issueTokenPair(
     refreshToken,
     refreshTokenExpiresAt: expiresAt,
   };
+}
+
+
+export async function getServiceAccessToken(
+  env: Env,
+  db: D1Database,
+  userId: number,
+  service: StreamingServiceType,
+): Promise<string | null> {
+  const record = await db
+    .prepare(
+      `SELECT access_token, refresh_token, token_expires_at
+       FROM user_streaming_accounts
+       WHERE user_id = ? AND service = ?`,
+    )
+    .bind(userId, service)
+    .first<{
+      access_token: string;
+      refresh_token: string | null;
+      token_expires_at: number | null;
+    }>();
+
+  if (!record) {
+    return null;
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  const expiresAt = record.token_expires_at ?? 0;
+
+  if (!expiresAt || expiresAt - now > 60) {
+    return record.access_token;
+  }
+
+  if (!record.refresh_token) {
+    return record.access_token;
+  }
+
+  try {
+    switch (service) {
+      case "spotify": {
+        const refreshed = await refreshSpotifyAccessToken(env, record.refresh_token);
+        const newExpiresAt = now + refreshed.expiresIn;
+
+        await db
+          .prepare(
+            `UPDATE user_streaming_accounts
+             SET access_token = ?, refresh_token = ?, token_expires_at = ?
+             WHERE user_id = ? AND service = ?`,
+          )
+          .bind(
+            refreshed.accessToken,
+            refreshed.refreshToken,
+            newExpiresAt,
+            userId,
+            service,
+          )
+          .run();
+
+        return refreshed.accessToken;
+      }
+      default:
+        return record.access_token;
+    }
+  } catch (error) {
+    console.error(`Failed to refresh ${service} access token`, error);
+    return record.access_token;
+  }
 }
 
 export const tokenConstants = {

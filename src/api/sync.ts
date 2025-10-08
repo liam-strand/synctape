@@ -6,21 +6,7 @@ import {
   filterTracksForService,
 } from "../utils/trackMatching";
 import { PlaylistLink } from "../utils/types";
-
-// Temporary helper to get access token, moved from the old auth.ts
-async function getAccessToken(
-  db: D1Database,
-  userId: number,
-  service: string,
-): Promise<string | null> {
-  const result = await db
-    .prepare(
-      "SELECT access_token FROM user_streaming_accounts WHERE user_id = ? AND service = ?",
-    )
-    .bind(userId, service)
-    .first<{ access_token: string }>();
-  return result?.access_token ?? null;
-}
+import { getServiceAccessToken } from "../utils/auth";
 
 /**
  * POST /api/sync
@@ -92,7 +78,8 @@ export async function handleSync(
 
     for (const link of links) {
       try {
-        const accessToken = await getAccessToken(
+        const accessToken = await getServiceAccessToken(
+          env,
           env.DB,
           link.user_id,
           link.service,
@@ -169,7 +156,8 @@ export async function handleSync(
       }
 
       try {
-        const accessToken = await getAccessToken(
+        const accessToken = await getServiceAccessToken(
+          env,
           env.DB,
           link.user_id,
           link.service,

@@ -2,21 +2,7 @@ import { Database } from "../db/queries";
 import { ServiceFactory } from "../services/ServiceFactory";
 import { matchOrCreateTrack } from "../utils/trackMatching";
 import { StreamingServiceType } from "../utils/types";
-
-// Temporary helper to get access token, moved from the old auth.ts
-async function getAccessToken(
-  db: D1Database,
-  userId: number,
-  service: string,
-): Promise<string | null> {
-  const result = await db
-    .prepare(
-      "SELECT access_token FROM user_streaming_accounts WHERE user_id = ? AND service = ?",
-    )
-    .bind(userId, service)
-    .first<{ access_token: string }>();
-  return result?.access_token ?? null;
-}
+import { getServiceAccessToken } from "../utils/auth";
 
 /**
  * POST /api/share
@@ -60,7 +46,7 @@ export async function handleShare(
     const db = new Database(env.DB);
 
     // Get the user's access token for this service
-    const accessToken = await getAccessToken(env.DB, userId, service);
+    const accessToken = await getServiceAccessToken(env, env.DB, userId, service);
 
     if (!accessToken) {
       return new Response(
@@ -73,7 +59,7 @@ export async function handleShare(
     }
 
     // Fetch playlist data from the streaming service
-  const streamingService = ServiceFactory.getService(service);
+    const streamingService = ServiceFactory.getService(service);
     const playlistData = await streamingService.fetchPlaylist(
       playlistId,
       accessToken,

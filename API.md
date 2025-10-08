@@ -172,6 +172,44 @@ curl https://synctape.ltrs.xyz/api/users/me \
   -H "Authorization: Bearer <YOUR_JWT>"
 ```
 
+---
+
+### GET /api/spotify/oauth-url
+
+Generates a signed one-time URL that starts the Spotify OAuth flow for the authenticated user.
+
+**Query Parameters:**
+
+- `returnTo` (optional): Relative path to redirect the user to after the connection completes. Defaults to `/connect/spotify/success`.
+
+**Headers:**
+
+- `Authorization: Bearer <YOUR_JWT>`
+
+**Response (200 OK):**
+
+```typescript
+{
+  url: string; // Worker URL that redirects to Spotify's authorize page
+}
+```
+
+Clients should redirect the browser to the returned `url`. The Worker validates the OAuth state and forwards the user to Spotify.
+
+---
+
+### GET /auth/spotify
+
+Internal redirect endpoint invoked by the URL returned from `/api/spotify/oauth-url`. Validates the OAuth `state` parameter and forwards the user to Spotify's consent page.
+
+---
+
+### GET /auth/spotify/callback
+
+Spotify's redirect URI. Exchanges the authorization code for tokens, fetches the Spotify profile, and stores/updates credentials in `user_streaming_accounts`. On success, the user is redirected to the `returnTo` path captured in the OAuth state (defaults to `/connect/spotify/success`). Your Spotify app configuration must list `https://synctape.ltrs.xyz/auth/spotify/callback` as an allowed redirect URI.
+
+---
+
 ### POST /api/share
 
 Import a playlist from a streaming service into Synctape.

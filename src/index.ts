@@ -5,6 +5,11 @@ import { handleCreate } from "./api/create";
 import { handleSync } from "./api/sync";
 import users from "./api/users";
 import { authMiddleware } from "./utils/auth";
+import {
+  handleSpotifyCallback,
+  handleSpotifyOAuthUrl,
+  handleSpotifyRedirect,
+} from "./api/spotify";
 
 // Define the Hono app
 const app = new Hono<{ Bindings: Env }>();
@@ -30,6 +35,11 @@ app.post("/api/sync", authMiddleware, (c) =>
   handleSync(c.req.raw, c.env, c.get("jwtPayload").userId),
 );
 app.route("/api/users", users);
+app.get("/api/spotify/oauth-url", authMiddleware, handleSpotifyOAuthUrl);
+
+// OAuth entrypoints
+app.get("/auth/spotify", handleSpotifyRedirect);
+app.get("/auth/spotify/callback", handleSpotifyCallback);
 
 // Health check endpoint
 app.get("/health", (c) => {
