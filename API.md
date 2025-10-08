@@ -2,17 +2,80 @@
 
 ## Authentication
 
-All API endpoints require authentication via the `X-User-Id` header (stubbed for now).
+All API endpoints that require authentication must include a JSON Web Token (JWT) in the `Authorization` header.
 
 **Example:**
 ```bash
 curl -X POST https://synctape.ltrs.xyz/api/share \
   -H "Content-Type: application/json" \
-  -H "X-User-Id: 1" \
+  -H "Authorization: Bearer <YOUR_JWT>" \
   -d '{"service":"spotify","playlistId":"37i9dQZF1DXcBWIGoYBM5M"}'
 ```
 
+To obtain a JWT, you must register or log in using the `/api/users` endpoint.
+
 ## Endpoints
+
+### POST /api/users
+
+Creates a new user or logs in an existing user. If the user's email already exists, they will be logged in. Otherwise, a new user will be created.
+
+**Request Body:**
+```typescript
+{
+  email: string;
+  username: string;
+}
+```
+
+**Response (200 OK):**
+```typescript
+{
+  token: string; // The JWT for the session
+}
+```
+
+**Error Responses:**
+- `400 Bad Request`: Missing `email` or `username`.
+- `409 Conflict`: The `username` is already taken.
+
+**Example:**
+```bash
+curl -X POST https://synctape.ltrs.xyz/api/users \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "test@example.com",
+    "username": "testuser"
+  }'
+```
+
+---
+
+### GET /api/users/me
+
+Retrieves the profile of the currently authenticated user.
+
+**Request Headers:**
+- `Authorization: Bearer <YOUR_JWT>`
+
+**Response (200 OK):**
+```typescript
+{
+  id: number;
+  email: string;
+  username: string;
+}
+```
+
+**Error Responses:**
+- `401 Unauthorized`: Missing or invalid JWT.
+- `404 Not Found`: The user associated with the token could not be found.
+
+**Example:**
+```bash
+curl https://synctape.ltrs.xyz/api/users/me \
+  -H "Authorization: Bearer <YOUR_JWT>"
+```
 
 ### POST /api/share
 
@@ -46,7 +109,7 @@ Import a playlist from a streaming service into Synctape.
 ```bash
 curl -X POST https://synctape.ltrs.xyz/api/share \
   -H "Content-Type: application/json" \
-  -H "X-User-Id: 1" \
+  -H "Authorization: Bearer <YOUR_JWT>" \
   -d '{
     "service": "spotify",
     "playlistId": "37i9dQZF1DXcBWIGoYBM5M"
@@ -94,7 +157,7 @@ Create a playlist on a streaming service from a Synctape playlist.
 ```bash
 curl -X POST https://synctape.ltrs.xyz/api/create \
   -H "Content-Type: application/json" \
-  -H "X-User-Id: 1" \
+  -H "Authorization: Bearer <YOUR_JWT>" \
   -d '{
     "playlistId": 42,
     "service": "apple_music"
@@ -141,6 +204,7 @@ Synchronize a playlist across all linked streaming services.
 ```bash
 curl -X POST https://synctape.ltrs.xyz/api/sync \
   -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <YOUR_JWT>" \
   -d '{
     "playlistId": 42
   }'
@@ -245,7 +309,7 @@ All endpoints return JSON error responses:
 All endpoints support CORS with the following headers:
 - `Access-Control-Allow-Origin: *`
 - `Access-Control-Allow-Methods: GET, POST, OPTIONS`
-- `Access-Control-Allow-Headers: Content-Type, X-User-Id`
+- `Access-Control-Allow-Headers: Content-Type, Authorization`
 
 ---
 
@@ -259,6 +323,9 @@ Currently no rate limits are enforced on the Synctape API. Future versions will 
 ---
 
 ## Future Endpoints (Planned)
+
+### GET /api/users
+List all users (admin only, future).
 
 ### GET /api/playlists
 List all playlists for the authenticated user.

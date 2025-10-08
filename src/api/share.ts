@@ -1,33 +1,43 @@
 import { Database } from '../db/queries';
 import { ServiceFactory } from '../services/ServiceFactory';
-import { requireAuth, getAccessToken } from '../utils/auth';
 import { matchOrCreateTrack } from '../utils/trackMatching';
 import { StreamingServiceType } from '../utils/types';
 
+// Temporary helper to get user ID from header for backward compatibility
+async function getUserIdFromRequest(request: Request): Promise<number> {
+  const authHeader = request.headers.get('X-User-Id');
+  if (!authHeader) {
+    throw new Error('Unauthorized');
+  }
+  const userId = parseInt(authHeader, 10);
+  if (isNaN(userId)) {
+    throw new Error('Unauthorized: Invalid User ID format');
+  }
+  return userId;
+}
+
+// Temporary helper to get access token, moved from the old auth.ts
+async function getAccessToken(
+  db: D1Database,
+  userId: number,
+  service: string
+): Promise<string | null> {
+  const result = await db
+    .prepare('SELECT access_token FROM user_streaming_accounts WHERE user_id = ? AND service = ?')
+    .bind(userId, service)
+    .first<{ access_token: string }>();
+  return result?.access_token ?? null;
+}
+
 /**
  * POST /api/share
- * 
+ *
  * Takes a link to an existing playlist on a streaming service and loads it into the database.
- * This endpoint is idempotent - calling it multiple times with the same playlist won't create duplicates.
- * 
- * Request body:
- * {
- *   "service": "spotify" | "apple_music" | "youtube_music",
- *   "playlistId": "service-specific-playlist-id",
- *   "playlistUrl": "optional-full-url" // for convenience, can parse this instead
- * }
- * 
- * Response:
- * {
- *   "playlistId": number,  // Our internal playlist ID
- *   "name": string,
- *   "trackCount": number
- * }
  */
 export async function handleShare(request: Request, env: Env): Promise<Response> {
   try {
     // Authenticate the user
-    const auth = await requireAuth(request);
+    const userId = await getUserIdFromRequest(request);
 
     // Parse request body
     const body = await request.json() as {
@@ -47,11 +57,8 @@ export async function handleShare(request: Request, env: Env): Promise<Response>
 
     const db = new Database(env.DB);
 
-    // Check if this playlist link already exists (idempotency)
-    const existingLink = await db.findPlaylistLink(0, service, playlistId); // We'll fix this after creating the playlist
-    
     // Get the user's access token for this service
-    const accessToken = await getAccessToken(env.DB, auth.userId, service);
+    const accessToken = await getAccessToken(env.DB, userId, service);
     
     if (!accessToken) {
       return new Response(JSON.stringify({ error: `No ${service} account connected` }), {
@@ -64,29 +71,21 @@ export async function handleShare(request: Request, env: Env): Promise<Response>
     const streamingService = ServiceFactory.getService(service);
     const playlistData = await streamingService.fetchPlaylist(playlistId, accessToken);
 
-    // Check for existing playlist link again with proper search
-    // For true idempotency, we'd need a unique constraint or search by service+servicePlaylistId across all playlists
-    let internalPlaylistId: number;
-    
     // Create a new playlist in our database
-    internalPlaylistId = await db.createPlaylist(
+    const internalPlaylistId = await db.createPlaylist(
       playlistData.name,
       playlistData.description,
-      auth.userId
+      userId
     );
 
     // Create the playlist link (mark as source since this is the original)
-    await db.createPlaylistLink(internalPlaylistId, auth.userId, service, playlistId, true);
+    await db.createPlaylistLink(internalPlaylistId, userId, service, playlistId, true);
 
     // Process and add tracks
     const trackIds: number[] = [];
     
     for (const trackMetadata of playlistData.tracks) {
-      // We need the service-specific track ID, but the interface doesn't provide it yet
-      // TODO: Update StreamingService interface to return service-specific IDs with track metadata
-      // For now, we'll use a placeholder
       const serviceTrackId = 'TODO'; // This needs to come from the API response
-      
       const trackId = await matchOrCreateTrack(db, trackMetadata, service, serviceTrackId);
       trackIds.push(trackId);
     }

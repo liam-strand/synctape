@@ -1,32 +1,25 @@
 import { Database } from '../db/queries';
 import { ServiceFactory } from '../services/ServiceFactory';
-import { getAccessToken } from '../utils/auth';
 import { matchOrCreateTrack, getTrackServiceId, filterTracksForService } from '../utils/trackMatching';
-import { Track, PlaylistLink } from '../utils/types';
+import { PlaylistLink } from '../utils/types';
+
+// Temporary helper to get access token, moved from the old auth.ts
+async function getAccessToken(
+  db: D1Database,
+  userId: number,
+  service: string
+): Promise<string | null> {
+  const result = await db
+    .prepare('SELECT access_token FROM user_streaming_accounts WHERE user_id = ? AND service = ?')
+    .bind(userId, service)
+    .first<{ access_token: string }>();
+  return result?.access_token ?? null;
+}
 
 /**
  * POST /api/sync
- * 
+ *
  * Syncs a playlist across all linked streaming services using last-write-wins strategy.
- * 
- * This endpoint:
- * 1. Fetches the latest version from all linked streaming services
- * 2. Merges them using last-write-wins based on last_synced_at timestamps
- * 3. Writes the merged version to our database
- * 4. Propagates changes to all linked streaming services
- * 
- * Request body:
- * {
- *   "playlistId": number  // Our internal playlist ID
- * }
- * 
- * Response:
- * {
- *   "success": true,
- *   "trackCount": number,
- *   "syncedServices": string[],
- *   "errors": { service: string, error: string }[]
- * }
  */
 export async function handleSync(request: Request, env: Env): Promise<Response> {
   try {
@@ -83,7 +76,6 @@ export async function handleSync(request: Request, env: Env): Promise<Response> 
         const streamingService = ServiceFactory.getService(link.service);
         const playlistData = await streamingService.fetchPlaylist(link.service_playlist_id, accessToken);
 
-        // Compare timestamps (last-write-wins)
         const linkTimestamp = link.last_synced_at || 0;
         const mostRecentTimestamp = mostRecentLink?.last_synced_at || 0;
 
@@ -112,7 +104,6 @@ export async function handleSync(request: Request, env: Env): Promise<Response> 
     const trackIds: number[] = [];
     
     for (const trackMetadata of mostRecentData.tracks) {
-      // TODO: Get service-specific track ID from the API response
       const serviceTrackId = 'TODO';
       
       const trackId = await matchOrCreateTrack(
@@ -124,18 +115,15 @@ export async function handleSync(request: Request, env: Env): Promise<Response> 
       trackIds.push(trackId);
     }
 
-    // Update playlist tracks
     await db.setPlaylistTracks(playlistId, trackIds);
     await db.updatePlaylistSyncTimestamp(playlistId);
 
-    // Get the updated tracks from database
     const tracks = await db.getPlaylistTracks(playlistId);
 
     // Propagate to all other services
     const syncedServices: string[] = [mostRecentLink.service];
 
     for (const link of links) {
-      // Skip the source we just pulled from
       if (link.id === mostRecentLink.id) {
         await db.updatePlaylistLinkSyncTimestamp(link.id);
         continue;
@@ -145,16 +133,14 @@ export async function handleSync(request: Request, env: Env): Promise<Response> 
         const accessToken = await getAccessToken(env.DB, link.user_id, link.service);
         
         if (!accessToken) {
-          continue; // Already logged in errors array
+          continue;
         }
 
-        // Filter tracks for this service
         const availableTracks = filterTracksForService(tracks, link.service);
         const serviceTrackIds = availableTracks
           .map(track => getTrackServiceId(track, link.service))
           .filter(id => id !== null) as string[];
 
-        // Update the service playlist
         const streamingService = ServiceFactory.getService(link.service);
         await streamingService.updatePlaylistTracks(
           link.service_playlist_id,
@@ -162,7 +148,6 @@ export async function handleSync(request: Request, env: Env): Promise<Response> 
           accessToken
         );
 
-        // Update sync timestamp
         await db.updatePlaylistLinkSyncTimestamp(link.id);
         syncedServices.push(link.service);
 

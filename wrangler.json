@@ -23,5 +23,8 @@
       "pattern": "synctape.ltrs.xyz",
       "zone_name": "ltrs.xyz"
     }
-  ]
+  ],
+  "vars": {
+    "JWT_SECRET": "a-secure-secret-key-that-is-at-least-32-characters-long"
+  }
 }
