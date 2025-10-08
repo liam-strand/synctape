@@ -1,4 +1,4 @@
-import { TrackMetadata, PlaylistData } from '../utils/types';
+import { TrackMetadata, PlaylistData } from "../utils/types";
 
 /**
  * Interface that all streaming service implementations must follow
@@ -19,7 +19,11 @@ export interface StreamingService {
    * @param accessToken - OAuth access token for the service
    * @returns The service-specific playlist ID
    */
-  createPlaylist(name: string, description: string, accessToken: string): Promise<string>;
+  createPlaylist(
+    name: string,
+    description: string,
+    accessToken: string,
+  ): Promise<string>;
 
   /**
    * Update playlist tracks (replaces all tracks)
@@ -27,12 +31,19 @@ export interface StreamingService {
    * @param trackIds - Array of service-specific track IDs in order
    * @param accessToken - OAuth access token for the service
    */
-  updatePlaylistTracks(playlistId: string, trackIds: string[], accessToken: string): Promise<void>;
+  updatePlaylistTracks(
+    playlistId: string,
+    trackIds: string[],
+    accessToken: string,
+  ): Promise<void>;
 
   /**
    * Search for a track by metadata (for future matching)
    * @param track - Track metadata to search for
    * @returns Service-specific track ID if found, null otherwise
    */
-  searchTrack(track: TrackMetadata, accessToken: string): Promise<string | null>;
+  searchTrack(
+    track: TrackMetadata,
+    accessToken: string,
+  ): Promise<string | null>;
 }

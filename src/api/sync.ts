@@ -1,16 +1,22 @@
-import { Database } from '../db/queries';
-import { ServiceFactory } from '../services/ServiceFactory';
-import { matchOrCreateTrack, getTrackServiceId, filterTracksForService } from '../utils/trackMatching';
-import { PlaylistLink } from '../utils/types';
+import { Database } from "../db/queries";
+import { ServiceFactory } from "../services/ServiceFactory";
+import {
+  matchOrCreateTrack,
+  getTrackServiceId,
+  filterTracksForService,
+} from "../utils/trackMatching";
+import { PlaylistLink } from "../utils/types";
 
 // Temporary helper to get access token, moved from the old auth.ts
 async function getAccessToken(
   db: D1Database,
   userId: number,
-  service: string
+  service: string,
 ): Promise<string | null> {
   const result = await db
-    .prepare('SELECT access_token FROM user_streaming_accounts WHERE user_id = ? AND service = ?')
+    .prepare(
+      "SELECT access_token FROM user_streaming_accounts WHERE user_id = ? AND service = ?",
+    )
     .bind(userId, service)
     .first<{ access_token: string }>();
   return result?.access_token ?? null;
@@ -21,31 +27,37 @@ async function getAccessToken(
  *
  * Syncs a playlist across all linked streaming services using last-write-wins strategy.
  */
-export async function handleSync(request: Request, env: Env): Promise<Response> {
+export async function handleSync(
+  request: Request,
+  env: Env,
+): Promise<Response> {
   try {
     // Parse request body
-    const body = await request.json() as {
+    const body = (await request.json()) as {
       playlistId: number;
     };
 
     const { playlistId } = body;
 
     if (!playlistId) {
-      return new Response(JSON.stringify({ error: 'Missing required field: playlistId' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: "Missing required field: playlistId" }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
 
     const db = new Database(env.DB);
 
     // Get the playlist
     const playlist = await db.getPlaylistById(playlistId);
-    
+
     if (!playlist) {
-      return new Response(JSON.stringify({ error: 'Playlist not found' }), {
+      return new Response(JSON.stringify({ error: "Playlist not found" }), {
         status: 404,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { "Content-Type": "application/json" },
       });
     }
 
@@ -53,10 +65,13 @@ export async function handleSync(request: Request, env: Env): Promise<Response> 
     const links = await db.getPlaylistLinks(playlistId);
 
     if (links.length === 0) {
-      return new Response(JSON.stringify({ error: 'No linked services found for this playlist' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: "No linked services found for this playlist" }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Fetch latest data from all services and determine which is most recent
@@ -66,15 +81,25 @@ export async function handleSync(request: Request, env: Env): Promise<Response> 
 
     for (const link of links) {
       try {
-        const accessToken = await getAccessToken(env.DB, link.user_id, link.service);
-        
+        const accessToken = await getAccessToken(
+          env.DB,
+          link.user_id,
+          link.service,
+        );
+
         if (!accessToken) {
-          errors.push({ service: link.service, error: 'No access token available' });
+          errors.push({
+            service: link.service,
+            error: "No access token available",
+          });
           continue;
         }
 
         const streamingService = ServiceFactory.getService(link.service);
-        const playlistData = await streamingService.fetchPlaylist(link.service_playlist_id, accessToken);
+        const playlistData = await streamingService.fetchPlaylist(
+          link.service_playlist_id,
+          accessToken,
+        );
 
         const linkTimestamp = link.last_synced_at || 0;
         const mostRecentTimestamp = mostRecentLink?.last_synced_at || 0;
@@ -83,34 +108,37 @@ export async function handleSync(request: Request, env: Env): Promise<Response> 
           mostRecentLink = link;
           mostRecentData = { ...playlistData, link };
         }
-
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
         errors.push({ service: link.service, error: errorMessage });
       }
     }
 
     if (!mostRecentLink || !mostRecentData) {
       return new Response(
-        JSON.stringify({ error: 'Failed to fetch data from any service', errors }),
+        JSON.stringify({
+          error: "Failed to fetch data from any service",
+          errors,
+        }),
         {
           status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        }
+          headers: { "Content-Type": "application/json" },
+        },
       );
     }
 
     // Update our database with the most recent version
     const trackIds: number[] = [];
-    
+
     for (const trackMetadata of mostRecentData.tracks) {
-      const serviceTrackId = 'TODO';
-      
+      const serviceTrackId = "TODO";
+
       const trackId = await matchOrCreateTrack(
         db,
         trackMetadata,
         mostRecentLink.service,
-        serviceTrackId
+        serviceTrackId,
       );
       trackIds.push(trackId);
     }
@@ -130,30 +158,37 @@ export async function handleSync(request: Request, env: Env): Promise<Response> 
       }
 
       try {
-        const accessToken = await getAccessToken(env.DB, link.user_id, link.service);
-        
+        const accessToken = await getAccessToken(
+          env.DB,
+          link.user_id,
+          link.service,
+        );
+
         if (!accessToken) {
           continue;
         }
 
         const availableTracks = filterTracksForService(tracks, link.service);
         const serviceTrackIds = availableTracks
-          .map(track => getTrackServiceId(track, link.service))
-          .filter(id => id !== null) as string[];
+          .map((track) => getTrackServiceId(track, link.service))
+          .filter((id) => id !== null) as string[];
 
         const streamingService = ServiceFactory.getService(link.service);
         await streamingService.updatePlaylistTracks(
           link.service_playlist_id,
           serviceTrackIds,
-          accessToken
+          accessToken,
         );
 
         await db.updatePlaylistLinkSyncTimestamp(link.id);
         syncedServices.push(link.service);
-
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        errors.push({ service: link.service, error: `Failed to update: ${errorMessage}` });
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        errors.push({
+          service: link.service,
+          error: `Failed to update: ${errorMessage}`,
+        });
       }
     }
 
@@ -166,18 +201,18 @@ export async function handleSync(request: Request, env: Env): Promise<Response> 
       }),
       {
         status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }
+        headers: { "Content-Type": "application/json" },
+      },
     );
-
   } catch (error) {
-    console.error('Error in /api/sync:', error);
-    
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    
+    console.error("Error in /api/sync:", error);
+
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+
     return new Response(JSON.stringify({ error: errorMessage }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { "Content-Type": "application/json" },
     });
   }
 }

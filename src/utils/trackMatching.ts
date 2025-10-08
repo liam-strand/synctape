@@ -1,5 +1,5 @@
-import { Track, TrackMetadata, StreamingServiceType } from './types';
-import { Database } from '../db/queries';
+import { Track, TrackMetadata, StreamingServiceType } from "./types";
+import { Database } from "../db/queries";
 
 /**
  * Match a track from service metadata to our database
@@ -9,11 +9,11 @@ export async function matchOrCreateTrack(
   db: Database,
   trackMetadata: TrackMetadata,
   service: StreamingServiceType,
-  serviceTrackId: string
+  serviceTrackId: string,
 ): Promise<number> {
   // Try to find by service-specific ID first
   let track = await db.findTrackByServiceId(service, serviceTrackId);
-  
+
   if (track) {
     return track.id;
   }
@@ -21,7 +21,7 @@ export async function matchOrCreateTrack(
   // Try to find by ISRC if available
   if (trackMetadata.isrc) {
     track = await db.findTrackByIsrc(trackMetadata.isrc);
-    
+
     if (track) {
       // Update the track with the service-specific ID
       await db.updateTrackServiceId(track.id, service, serviceTrackId);
@@ -50,13 +50,16 @@ export async function matchOrCreateTrack(
  * Find a track ID for a specific service
  * Returns null if the track doesn't exist on that service
  */
-export function getTrackServiceId(track: Track, service: StreamingServiceType): string | null {
+export function getTrackServiceId(
+  track: Track,
+  service: StreamingServiceType,
+): string | null {
   switch (service) {
-    case 'spotify':
+    case "spotify":
       return track.spotify_id || null;
-    case 'apple_music':
+    case "apple_music":
       return track.apple_music_id || null;
-    case 'youtube_music':
+    case "youtube_music":
       return track.youtube_music_id || null;
     default:
       return null;
@@ -66,6 +69,9 @@ export function getTrackServiceId(track: Track, service: StreamingServiceType): 
 /**
  * Filter tracks to only those available on a specific service
  */
-export function filterTracksForService(tracks: Track[], service: StreamingServiceType): Track[] {
-  return tracks.filter(track => getTrackServiceId(track, service) !== null);
+export function filterTracksForService(
+  tracks: Track[],
+  service: StreamingServiceType,
+): Track[] {
+  return tracks.filter((track) => getTrackServiceId(track, service) !== null);
 }

@@ -1,17 +1,17 @@
-import { Database } from '../db/queries';
-import { ServiceFactory } from '../services/ServiceFactory';
-import { matchOrCreateTrack } from '../utils/trackMatching';
-import { StreamingServiceType } from '../utils/types';
+import { Database } from "../db/queries";
+import { ServiceFactory } from "../services/ServiceFactory";
+import { matchOrCreateTrack } from "../utils/trackMatching";
+import { StreamingServiceType } from "../utils/types";
 
 // Temporary helper to get user ID from header for backward compatibility
 async function getUserIdFromRequest(request: Request): Promise<number> {
-  const authHeader = request.headers.get('X-User-Id');
+  const authHeader = request.headers.get("X-User-Id");
   if (!authHeader) {
-    throw new Error('Unauthorized');
+    throw new Error("Unauthorized");
   }
   const userId = parseInt(authHeader, 10);
   if (isNaN(userId)) {
-    throw new Error('Unauthorized: Invalid User ID format');
+    throw new Error("Unauthorized: Invalid User ID format");
   }
   return userId;
 }
@@ -20,10 +20,12 @@ async function getUserIdFromRequest(request: Request): Promise<number> {
 async function getAccessToken(
   db: D1Database,
   userId: number,
-  service: string
+  service: string,
 ): Promise<string | null> {
   const result = await db
-    .prepare('SELECT access_token FROM user_streaming_accounts WHERE user_id = ? AND service = ?')
+    .prepare(
+      "SELECT access_token FROM user_streaming_accounts WHERE user_id = ? AND service = ?",
+    )
     .bind(userId, service)
     .first<{ access_token: string }>();
   return result?.access_token ?? null;
@@ -34,13 +36,16 @@ async function getAccessToken(
  *
  * Takes a link to an existing playlist on a streaming service and loads it into the database.
  */
-export async function handleShare(request: Request, env: Env): Promise<Response> {
+export async function handleShare(
+  request: Request,
+  env: Env,
+): Promise<Response> {
   try {
     // Authenticate the user
     const userId = await getUserIdFromRequest(request);
 
     // Parse request body
-    const body = await request.json() as {
+    const body = (await request.json()) as {
       service: StreamingServiceType;
       playlistId: string;
       playlistUrl?: string;
@@ -49,44 +54,66 @@ export async function handleShare(request: Request, env: Env): Promise<Response>
     const { service, playlistId } = body;
 
     if (!service || !playlistId) {
-      return new Response(JSON.stringify({ error: 'Missing required fields: service, playlistId' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({
+          error: "Missing required fields: service, playlistId",
+        }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
 
     const db = new Database(env.DB);
 
     // Get the user's access token for this service
     const accessToken = await getAccessToken(env.DB, userId, service);
-    
+
     if (!accessToken) {
-      return new Response(JSON.stringify({ error: `No ${service} account connected` }), {
-        status: 403,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ error: `No ${service} account connected` }),
+        {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
     }
 
     // Fetch playlist data from the streaming service
     const streamingService = ServiceFactory.getService(service);
-    const playlistData = await streamingService.fetchPlaylist(playlistId, accessToken);
+    const playlistData = await streamingService.fetchPlaylist(
+      playlistId,
+      accessToken,
+    );
 
     // Create a new playlist in our database
     const internalPlaylistId = await db.createPlaylist(
       playlistData.name,
       playlistData.description,
-      userId
+      userId,
     );
 
     // Create the playlist link (mark as source since this is the original)
-    await db.createPlaylistLink(internalPlaylistId, userId, service, playlistId, true);
+    await db.createPlaylistLink(
+      internalPlaylistId,
+      userId,
+      service,
+      playlistId,
+      true,
+    );
 
     // Process and add tracks
     const trackIds: number[] = [];
-    
+
     for (const trackMetadata of playlistData.tracks) {
-      const serviceTrackId = 'TODO'; // This needs to come from the API response
-      const trackId = await matchOrCreateTrack(db, trackMetadata, service, serviceTrackId);
+      const serviceTrackId = "TODO"; // This needs to come from the API response
+      const trackId = await matchOrCreateTrack(
+        db,
+        trackMetadata,
+        service,
+        serviceTrackId,
+      );
       trackIds.push(trackId);
     }
 
@@ -101,19 +128,19 @@ export async function handleShare(request: Request, env: Env): Promise<Response>
       }),
       {
         status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }
+        headers: { "Content-Type": "application/json" },
+      },
     );
-
   } catch (error) {
-    console.error('Error in /api/share:', error);
-    
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    const status = errorMessage === 'Unauthorized' ? 401 : 500;
-    
+    console.error("Error in /api/share:", error);
+
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    const status = errorMessage === "Unauthorized" ? 401 : 500;
+
     return new Response(JSON.stringify({ error: errorMessage }), {
       status,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { "Content-Type": "application/json" },
     });
   }
 }

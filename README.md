@@ -16,9 +16,11 @@ A collaborative playlist app that allows people to sync playlists across differe
 ### API Endpoints
 
 #### POST /api/share
+
 Takes a link to an existing playlist on a streaming service and loads it into the database.
 
 **Request:**
+
 ```json
 {
   "service": "spotify",
@@ -27,6 +29,7 @@ Takes a link to an existing playlist on a streaming service and loads it into th
 ```
 
 **Response:**
+
 ```json
 {
   "playlistId": 1,
@@ -36,14 +39,17 @@ Takes a link to an existing playlist on a streaming service and loads it into th
 ```
 
 **Features:**
+
 - Idempotent (calling multiple times won't create duplicates)
 - Creator becomes the owner of the playlist
 - Original playlist is marked as source
 
 #### POST /api/create
+
 Creates a playlist on the specified streaming service and syncs it with our database playlist.
 
 **Request:**
+
 ```json
 {
   "playlistId": 1,
@@ -52,6 +58,7 @@ Creates a playlist on the specified streaming service and syncs it with our data
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -62,14 +69,17 @@ Creates a playlist on the specified streaming service and syncs it with our data
 ```
 
 **Features:**
+
 - Only creates on the requested service
 - Skips tracks not available on the target service
 - Links the service playlist to our database
 
 #### POST /api/sync
+
 Syncs a playlist across all linked streaming services.
 
 **Request:**
+
 ```json
 {
   "playlistId": 1
@@ -77,6 +87,7 @@ Syncs a playlist across all linked streaming services.
 ```
 
 **Response:**
+
 ```json
 {
   "success": true,
@@ -87,6 +98,7 @@ Syncs a playlist across all linked streaming services.
 ```
 
 **Sync Strategy:**
+
 - Uses last-write-wins based on `last_synced_at` timestamps
 - Fetches latest from all services
 - Determines most recent version
@@ -102,22 +114,22 @@ The `/api/sync` endpoint is also triggered automatically every 30 minutes via Cl
 ```
 src/
   index.ts                    # Main Worker entry point with routing
-  
+
   services/
     StreamingService.ts       # Interface definition
     SpotifyService.ts         # Spotify implementation (stubbed)
     AppleMusicService.ts      # Apple Music implementation (stubbed)
     ServiceFactory.ts         # Factory to get service by name
-  
+
   db/
     queries.ts               # D1 database query utilities
-  
+
   api/
     share.ts                 # /api/share handler
     create.ts                # /api/create handler
     sync.ts                  # /api/sync handler
     users.ts                 # /api/users and /api/users/me handlers
-  
+
   utils/
     auth.ts                  # JWT Authentication middleware
     trackMatching.ts         # Track matching logic
@@ -138,21 +150,25 @@ migrations/
 ### Setup
 
 1. Install dependencies:
+
 ```bash
 pnpm install
 ```
 
 2. Apply database migrations:
+
 ```bash
 pnpm run seedLocalD1
 ```
 
 3. Run locally:
+
 ```bash
 pnpm run dev
 ```
 
 4. Deploy to Cloudflare:
+
 ```bash
 pnpm run deploy
 ```
@@ -199,11 +215,13 @@ The JWT implementation uses the `hono/jwt` library and is configured with a `JWT
 ### Track Matching
 
 Track matching currently works by:
+
 1. Checking service-specific ID
 2. Falling back to ISRC matching
 3. Creating a new track if not found
 
 Future improvements:
+
 - Fuzzy matching by name/artist/album
 - Using multiple metadata sources
 - Machine learning for better matching
@@ -213,14 +231,17 @@ Future improvements:
 The local D1 database can be seeded with sample data for development and testing. The seed data includes two users (`alice` and `bob`), playlists, and tracks by Vulfpeck.
 
 To seed the database, run the following command:
+
 ```bash
 pnpm run seedLocalD1
 ```
+
 This command applies all migrations, including the seed data migration file.
 
 ### Rate Limiting
 
 Streaming service APIs have rate limits. Consider:
+
 - Batching operations
 - Implementing exponential backoff
 - Caching frequently accessed data

@@ -1,6 +1,6 @@
 // Shared TypeScript types
 
-export type StreamingServiceType = 'spotify' | 'apple_music' | 'youtube_music';
+export type StreamingServiceType = "spotify" | "apple_music" | "youtube_music";
 
 export interface TrackMetadata {
   name: string;

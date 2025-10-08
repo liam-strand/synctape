@@ -5,6 +5,7 @@
 All API endpoints that require authentication must include a JSON Web Token (JWT) in the `Authorization` header.
 
 **Example:**
+
 ```bash
 curl -X POST https://synctape.ltrs.xyz/api/share \
   -H "Content-Type: application/json" \
@@ -21,6 +22,7 @@ To obtain a JWT, you must register or log in using the `/api/users` endpoint.
 Creates a new user or logs in an existing user. If the user's email already exists, they will be logged in. Otherwise, a new user will be created.
 
 **Request Body:**
+
 ```typescript
 {
   email: string;
@@ -29,6 +31,7 @@ Creates a new user or logs in an existing user. If the user's email already exis
 ```
 
 **Response (200 OK):**
+
 ```typescript
 {
   token: string; // The JWT for the session
@@ -36,10 +39,12 @@ Creates a new user or logs in an existing user. If the user's email already exis
 ```
 
 **Error Responses:**
+
 - `400 Bad Request`: Missing `email` or `username`.
 - `409 Conflict`: The `username` is already taken.
 
 **Example:**
+
 ```bash
 curl -X POST https://synctape.ltrs.xyz/api/users \
   -H "Content-Type: application/json" \
@@ -56,9 +61,11 @@ curl -X POST https://synctape.ltrs.xyz/api/users \
 Retrieves the profile of the currently authenticated user.
 
 **Request Headers:**
+
 - `Authorization: Bearer <YOUR_JWT>`
 
 **Response (200 OK):**
+
 ```typescript
 {
   id: number;
@@ -68,10 +75,12 @@ Retrieves the profile of the currently authenticated user.
 ```
 
 **Error Responses:**
+
 - `401 Unauthorized`: Missing or invalid JWT.
 - `404 Not Found`: The user associated with the token could not be found.
 
 **Example:**
+
 ```bash
 curl https://synctape.ltrs.xyz/api/users/me \
   -H "Authorization: Bearer <YOUR_JWT>"
@@ -82,6 +91,7 @@ curl https://synctape.ltrs.xyz/api/users/me \
 Import a playlist from a streaming service into Synctape.
 
 **Request Body:**
+
 ```typescript
 {
   service: "spotify" | "apple_music" | "youtube_music";
@@ -91,21 +101,24 @@ Import a playlist from a streaming service into Synctape.
 ```
 
 **Response (200 OK):**
+
 ```typescript
 {
-  playlistId: number;  // Internal Synctape playlist ID
+  playlistId: number; // Internal Synctape playlist ID
   name: string;
   trackCount: number;
 }
 ```
 
 **Error Responses:**
+
 - `400 Bad Request`: Missing required fields
 - `401 Unauthorized`: Missing or invalid authentication
 - `403 Forbidden`: User hasn't connected their account for this service
 - `500 Internal Server Error`: Service API failure
 
 **Example:**
+
 ```bash
 curl -X POST https://synctape.ltrs.xyz/api/share \
   -H "Content-Type: application/json" \
@@ -117,6 +130,7 @@ curl -X POST https://synctape.ltrs.xyz/api/share \
 ```
 
 **Notes:**
+
 - This endpoint is idempotent
 - The requesting user becomes the owner of the imported playlist
 - The source playlist is marked in the database
@@ -128,24 +142,27 @@ curl -X POST https://synctape.ltrs.xyz/api/share \
 Create a playlist on a streaming service from a Synctape playlist.
 
 **Request Body:**
+
 ```typescript
 {
-  playlistId: number;  // Internal Synctape playlist ID
+  playlistId: number; // Internal Synctape playlist ID
   service: "spotify" | "apple_music" | "youtube_music";
 }
 ```
 
 **Response (200 OK):**
+
 ```typescript
 {
   success: true;
-  servicePlaylistId: string;  // ID on the streaming service
-  trackCount: number;  // Number of tracks added
-  skippedTracks: number;  // Tracks not available on this service
+  servicePlaylistId: string; // ID on the streaming service
+  trackCount: number; // Number of tracks added
+  skippedTracks: number; // Tracks not available on this service
 }
 ```
 
 **Error Responses:**
+
 - `400 Bad Request`: Missing required fields
 - `401 Unauthorized`: Missing or invalid authentication
 - `403 Forbidden`: User hasn't connected their account for this service
@@ -154,6 +171,7 @@ Create a playlist on a streaming service from a Synctape playlist.
 - `500 Internal Server Error`: Service API failure
 
 **Example:**
+
 ```bash
 curl -X POST https://synctape.ltrs.xyz/api/create \
   -H "Content-Type: application/json" \
@@ -165,6 +183,7 @@ curl -X POST https://synctape.ltrs.xyz/api/create \
 ```
 
 **Notes:**
+
 - Only creates on the specified service
 - Tracks not available on the service are skipped
 - A link is created between the Synctape playlist and service playlist
@@ -176,13 +195,15 @@ curl -X POST https://synctape.ltrs.xyz/api/create \
 Synchronize a playlist across all linked streaming services.
 
 **Request Body:**
+
 ```typescript
 {
-  playlistId: number;  // Internal Synctape playlist ID
+  playlistId: number; // Internal Synctape playlist ID
 }
 ```
 
 **Response (200 OK):**
+
 ```typescript
 {
   success: true;
@@ -196,11 +217,13 @@ Synchronize a playlist across all linked streaming services.
 ```
 
 **Error Responses:**
+
 - `400 Bad Request`: Missing required field or no linked services
 - `404 Not Found`: Playlist doesn't exist
 - `500 Internal Server Error`: All services failed to sync
 
 **Example:**
+
 ```bash
 curl -X POST https://synctape.ltrs.xyz/api/sync \
   -H "Content-Type: application/json" \
@@ -211,6 +234,7 @@ curl -X POST https://synctape.ltrs.xyz/api/sync \
 ```
 
 **Notes:**
+
 - Uses last-write-wins strategy based on `last_synced_at` timestamps
 - Fetches from all linked services, determines most recent
 - Updates database with latest version
@@ -218,6 +242,7 @@ curl -X POST https://synctape.ltrs.xyz/api/sync \
 - Partial failures are reported in the `errors` array
 
 **Sync Strategy:**
+
 1. Fetch playlist from all linked services
 2. Compare `last_synced_at` timestamps
 3. Use the most recently updated version as source
@@ -231,13 +256,15 @@ curl -X POST https://synctape.ltrs.xyz/api/sync \
 Health check endpoint.
 
 **Response (200 OK):**
+
 ```typescript
 {
-  status: "ok"
+  status: "ok";
 }
 ```
 
 **Example:**
+
 ```bash
 curl https://synctape.ltrs.xyz/health
 ```
@@ -249,6 +276,7 @@ curl https://synctape.ltrs.xyz/health
 The `/api/sync` endpoint is automatically called every 30 minutes by Cloudflare Cron Triggers to keep all playlists synchronized.
 
 **Current Strategy:**
+
 - Syncs playlists that haven't been synced in the last 24 hours
 - Processes up to 100 playlists per cron run
 - Runs every 30 minutes
@@ -258,6 +286,7 @@ The `/api/sync` endpoint is automatically called every 30 minutes by Cloudflare 
 ## Streaming Service Support
 
 ### Supported Services
+
 - Spotify (stubbed)
 - Apple Music (stubbed)
 - YouTube Music (planned)
@@ -265,18 +294,21 @@ The `/api/sync` endpoint is automatically called every 30 minutes by Cloudflare 
 ### Service-Specific Notes
 
 #### Spotify
+
 - Uses Spotify Web API
 - Requires OAuth 2.0 authentication
 - Rate limit: ~180 requests per minute
 - Track IDs are in format: `spotify:track:ID` or just `ID`
 
 #### Apple Music
+
 - Uses Apple Music API
 - Requires Apple Music subscription and developer token
 - Rate limits vary by endpoint
 - Track IDs are in format: `i.123456`
 
 #### YouTube Music
+
 - Not yet implemented
 - Will use YouTube Music API or ytmusicapi
 
@@ -294,6 +326,7 @@ All endpoints return JSON error responses:
 ```
 
 **Common HTTP Status Codes:**
+
 - `200 OK`: Success
 - `400 Bad Request`: Invalid request parameters
 - `401 Unauthorized`: Authentication required
@@ -307,6 +340,7 @@ All endpoints return JSON error responses:
 ## CORS
 
 All endpoints support CORS with the following headers:
+
 - `Access-Control-Allow-Origin: *`
 - `Access-Control-Allow-Methods: GET, POST, OPTIONS`
 - `Access-Control-Allow-Headers: Content-Type, Authorization`
@@ -316,6 +350,7 @@ All endpoints support CORS with the following headers:
 ## Rate Limits
 
 Currently no rate limits are enforced on the Synctape API. Future versions will implement:
+
 - Per-user rate limiting
 - IP-based rate limiting
 - Graceful handling of streaming service rate limits
@@ -325,22 +360,29 @@ Currently no rate limits are enforced on the Synctape API. Future versions will 
 ## Future Endpoints (Planned)
 
 ### GET /api/users
+
 List all users (admin only, future).
 
 ### GET /api/playlists
+
 List all playlists for the authenticated user.
 
 ### GET /api/playlist/:id
+
 Get details about a specific playlist.
 
 ### DELETE /api/playlist/:id
+
 Delete a playlist (owner only).
 
 ### POST /api/playlist/:id/tracks
+
 Add tracks to a playlist.
 
 ### DELETE /api/playlist/:id/tracks
+
 Remove tracks from a playlist.
 
 ### GET /api/search
+
 Search for tracks across services.

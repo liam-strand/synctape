@@ -1,6 +1,6 @@
-import { MiddlewareHandler } from 'hono';
-import { jwt } from 'hono/jwt';
-import type { JWTPayload } from 'hono/utils/jwt/types';
+import { MiddlewareHandler } from "hono";
+import { jwt } from "hono/jwt";
+import type { JWTPayload } from "hono/utils/jwt/types";
 
 /**
  * Define the structure of the JWT payload
