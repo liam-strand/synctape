@@ -4,12 +4,14 @@ import { handleShare } from "./api/share";
 import { handleCreate } from "./api/create";
 import { handleSync } from "./api/sync";
 import users from "./api/users";
+import { createPlaylistsRouter } from "./api/playlists";
 import { authMiddleware } from "./utils/auth";
 import {
   handleSpotifyCallback,
   handleSpotifyOAuthUrl,
   handleSpotifyRedirect,
 } from "./api/spotify";
+import { PlaylistService } from "./services/playlist-service";
 
 // Define the Hono app
 const app = new Hono<{ Bindings: Env }>();
@@ -20,9 +22,12 @@ app.use(
   cors({
     origin: "*",
     allowHeaders: ["Content-Type", "Authorization"],
-    allowMethods: ["POST", "GET", "OPTIONS"],
+    allowMethods: ["POST", "GET", "OPTIONS", "PATCH", "DELETE"],
   }),
 );
+
+// Instantiate services
+const playlistService = new PlaylistService(app.get("env"));
 
 // API routes
 app.post("/api/share", authMiddleware, (c) =>
@@ -35,6 +40,10 @@ app.post("/api/sync", authMiddleware, (c) =>
   handleSync(c.req.raw, c.env, c.get("jwtPayload").userId),
 );
 app.route("/api/users", users);
+
+const playlistsRouter = createPlaylistsRouter(authMiddleware, playlistService);
+app.route("/api/playlists", playlistsRouter);
+
 app.get("/api/spotify/oauth-url", authMiddleware, handleSpotifyOAuthUrl);
 
 // OAuth entrypoints
