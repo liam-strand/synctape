@@ -6,22 +6,6 @@ import {
 } from "../utils/trackMatching";
 import { StreamingServiceType } from "../utils/types";
 
-// Temporary helper to get user ID from header for backward compatibility
-async function getUserIdFromRequest(request: Request): Promise<number> {
-  const authHeader = request.headers.get("X-User-Id");
-  if (!authHeader) {
-    // For the new JWT-based auth, the Authorization header should be used.
-    // This is a temporary fallback for older handlers.
-    // In a real app, you would migrate this to use the JWT middleware.
-    throw new Error("Unauthorized");
-  }
-  const userId = parseInt(authHeader, 10);
-  if (isNaN(userId)) {
-    throw new Error("Unauthorized: Invalid User ID format");
-  }
-  return userId;
-}
-
 // Temporary helper to get access token, moved from the old auth.ts
 async function getAccessToken(
   db: D1Database,
@@ -45,10 +29,18 @@ async function getAccessToken(
 export async function handleCreate(
   request: Request,
   env: Env,
+  userId?: number,
 ): Promise<Response> {
   try {
-    // Authenticate the user using the temporary header-based method
-    const userId = await getUserIdFromRequest(request);
+    if (!userId) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
 
     // Parse request body
     const body = (await request.json()) as {
@@ -80,6 +72,16 @@ export async function handleCreate(
         status: 404,
         headers: { "Content-Type": "application/json" },
       });
+    }
+
+    if (playlist.owner_id !== userId) {
+      const hasAccess = await db.userHasPlaylistLink(playlistId, userId);
+      if (!hasAccess) {
+        return new Response(JSON.stringify({ error: "Forbidden" }), {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
     }
 
     // Check if a link already exists for this service
@@ -166,7 +168,12 @@ export async function handleCreate(
 
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
-    const status = errorMessage === "Unauthorized" ? 401 : 500;
+    const status =
+      errorMessage === "Unauthorized"
+        ? 401
+        : errorMessage === "Forbidden"
+          ? 403
+          : 500;
 
     return new Response(JSON.stringify({ error: errorMessage }), {
       status,

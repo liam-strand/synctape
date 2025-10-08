@@ -1,12 +1,18 @@
 import { Hono } from "hono";
-import { sign } from "hono/jwt";
-import { authMiddleware } from "../utils/auth";
+import {
+  authMiddleware,
+  issueTokenPair,
+  tokenConstants,
+  validateRefreshToken,
+  revokeRefreshToken,
+} from "../utils/auth";
 import type { AuthPayload } from "../utils/auth";
 
 const users = new Hono<{
   Bindings: {
     DB: D1Database;
     JWT_SECRET: string;
+    JWT_REFRESH_SECRET: string;
   };
   Variables: {
     jwtPayload: AuthPayload;
@@ -42,14 +48,14 @@ users.post("/", async (c) => {
       user = results[0] as { id: number; email: string; username: string };
     }
 
-    // Issue a JWT
-    const payload: AuthPayload = {
-      userId: user.id,
-      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24, // Expires in 24 hours
-    };
-    const token = await sign(payload, c.env.JWT_SECRET);
+    const tokens = await issueTokenPair(c.env, user.id);
 
-    return c.json({ token });
+    return c.json({
+      accessToken: tokens.accessToken,
+      accessTokenExpiresIn: tokens.accessTokenExpiresIn,
+      refreshToken: tokens.refreshToken,
+      refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+    });
   } catch (e: any) {
     if (e.message.includes("UNIQUE constraint failed")) {
       return c.json({ error: "Username or email already taken" }, 409);
@@ -79,5 +85,61 @@ users.get("/me", authMiddleware, async (c) => {
 
   return c.json(user);
 });
+
+/**
+ * POST /api/users/refresh
+ * Exchange a refresh token for a new token pair
+ */
+users.post("/refresh", async (c) => {
+  const { refreshToken } = await c.req.json<{ refreshToken?: string }>();
+
+  if (!refreshToken) {
+    return c.json({ error: "Refresh token is required" }, 400);
+  }
+
+  try {
+    const { userId, tokenHash } = await validateRefreshToken(c.env, refreshToken);
+    const tokens = await issueTokenPair(c.env, userId, {
+      revokeTokenHash: tokenHash,
+    });
+
+    return c.json({
+      accessToken: tokens.accessToken,
+      accessTokenExpiresIn: tokens.accessTokenExpiresIn,
+      refreshToken: tokens.refreshToken,
+      refreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
+    });
+  } catch (error) {
+    console.error("Failed to refresh token", error);
+    return c.json({ error: "Invalid or expired refresh token" }, 401);
+  }
+});
+
+/**
+ * POST /api/users/logout
+ * Revoke the provided refresh token (optional extra security)
+ */
+users.post("/logout", async (c) => {
+  const { refreshToken } = await c.req.json<{ refreshToken?: string }>();
+
+  if (!refreshToken) {
+    return c.json({ error: "Refresh token is required" }, 400);
+  }
+
+  try {
+    await revokeRefreshToken(c.env, refreshToken);
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("Failed to revoke refresh token", error);
+    return c.json({ error: "Unable to revoke refresh token" }, 400);
+  }
+});
+
+users.get("/config/token", (c) =>
+  c.json({
+    accessTokenTtlSeconds: tokenConstants.ACCESS_TOKEN_TTL_SECONDS,
+    refreshTokenTtlSeconds: tokenConstants.REFRESH_TOKEN_TTL_SECONDS,
+  }),
+);
 
 export default users;

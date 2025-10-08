@@ -3,19 +3,6 @@ import { ServiceFactory } from "../services/ServiceFactory";
 import { matchOrCreateTrack } from "../utils/trackMatching";
 import { StreamingServiceType } from "../utils/types";
 
-// Temporary helper to get user ID from header for backward compatibility
-async function getUserIdFromRequest(request: Request): Promise<number> {
-  const authHeader = request.headers.get("X-User-Id");
-  if (!authHeader) {
-    throw new Error("Unauthorized");
-  }
-  const userId = parseInt(authHeader, 10);
-  if (isNaN(userId)) {
-    throw new Error("Unauthorized: Invalid User ID format");
-  }
-  return userId;
-}
-
 // Temporary helper to get access token, moved from the old auth.ts
 async function getAccessToken(
   db: D1Database,
@@ -39,10 +26,15 @@ async function getAccessToken(
 export async function handleShare(
   request: Request,
   env: Env,
+  userId?: number,
 ): Promise<Response> {
   try {
-    // Authenticate the user
-    const userId = await getUserIdFromRequest(request);
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
 
     // Parse request body
     const body = (await request.json()) as {
@@ -81,7 +73,7 @@ export async function handleShare(
     }
 
     // Fetch playlist data from the streaming service
-    const streamingService = ServiceFactory.getService(service);
+  const streamingService = ServiceFactory.getService(service);
     const playlistData = await streamingService.fetchPlaylist(
       playlistId,
       accessToken,

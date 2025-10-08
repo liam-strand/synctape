@@ -12,6 +12,7 @@ A collaborative playlist app that allows people to sync playlists across differe
 - **playlists**: Playlist metadata
 - **playlist_tracks**: Junction table maintaining track order in playlists
 - **playlist_links**: Links between our playlists and service-specific playlist IDs
+- **user_refresh_tokens**: Stores hashed refresh tokens for JWT rotation
 
 ### API Endpoints
 
@@ -128,10 +129,10 @@ src/
     share.ts                 # /api/share handler
     create.ts                # /api/create handler
     sync.ts                  # /api/sync handler
-    users.ts                 # /api/users and /api/users/me handlers
+  users.ts                 # /api/users auth handlers (login, refresh, profile)
 
   utils/
-    auth.ts                  # JWT Authentication middleware
+  auth.ts                  # JWT Authentication utilities and middleware
     trackMatching.ts         # Track matching logic
     types.ts                 # Shared TypeScript types
 
@@ -173,24 +174,22 @@ pnpm run dev
 pnpm run deploy
 ```
 
-### JWT Secret
+### JWT Secrets
 
-This project uses JSON Web Tokens (JWT) for user authentication. A secret key is required to sign and verify these tokens. A default, insecure key is provided in `wrangler.json` for local development.
+Synctape issues short-lived access tokens and longer-lived refresh tokens. Two secrets are required:
 
-For production, you **must** generate a strong, unique secret. You can generate a secure secret using the following command:
+- `JWT_SECRET`: Signs access tokens (15 minute TTL).
+- `JWT_REFRESH_SECRET`: Signs refresh tokens (14 day TTL). Defaults to `JWT_SECRET` if unset, but you should set a distinct value in production.
+
+Generate strong secrets with:
 
 ```bash
 openssl rand -base64 32
 ```
 
-Once you have your secret, you need to set it as an environment variable in your Cloudflare Worker's settings.
+Configure the variables in the Cloudflare dashboard (Worker **Settings → Variables**) or via `wrangler secret put`.
 
-1. Go to your Worker in the Cloudflare dashboard.
-2. Navigate to **Settings** > **Variables**.
-3. Under **Environment Variables**, click **Add variable**.
-4. Set the variable name to `JWT_SECRET` and paste your generated secret as the value.
-5. Make sure to **Encrypt** the secret for security.
-6. Click **Save**.
+Refresh tokens are hashed and persisted in the `user_refresh_tokens` table to support rotation and revocation.
 
 ## TODO / Stubbed Features
 
@@ -208,9 +207,9 @@ Once you have your secret, you need to set it as an environment variable in your
 
 ### Authentication
 
-Authentication is handled via JSON Web Tokens (JWT). Users can register and log in via the `/api/users` endpoint to receive a token. This token must be sent in the `Authorization: Bearer <token>` header for all protected endpoints.
+Authentication uses JWT bearer tokens. Call `POST /api/users` to log in or register and receive an access/refresh token pair. Send the access token in the `Authorization: Bearer <token>` header for all protected endpoints. Refresh tokens can be exchanged at `POST /api/users/refresh` and revoked with `POST /api/users/logout`.
 
-The JWT implementation uses the `hono/jwt` library and is configured with a `JWT_SECRET` environment variable.
+Tokens are verified with the `utils/auth.ts` middleware, which enforces expiry, token type, and user binding.
 
 ### Track Matching
 

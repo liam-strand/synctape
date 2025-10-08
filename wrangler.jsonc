@@ -23,6 +23,7 @@
     }
   ],
   "vars": {
-    "JWT_SECRET": "a-secure-secret-key-that-is-at-least-32-characters-long"
+    "JWT_SECRET": "a-secure-secret-key-that-is-at-least-32-characters-long",
+    "JWT_REFRESH_SECRET": "an-even-more-secure-refresh-secret-of-similar-length"
   }
 }

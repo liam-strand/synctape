@@ -30,6 +30,7 @@ async function getAccessToken(
 export async function handleSync(
   request: Request,
   env: Env,
+  userId?: number,
 ): Promise<Response> {
   try {
     // Parse request body
@@ -59,6 +60,16 @@ export async function handleSync(
         status: 404,
         headers: { "Content-Type": "application/json" },
       });
+    }
+
+    if (userId && playlist.owner_id !== userId) {
+      const hasAccess = await db.userHasPlaylistLink(playlistId, userId);
+      if (!hasAccess) {
+        return new Response(JSON.stringify({ error: "Forbidden" }), {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
     }
 
     // Get all linked services for this playlist
@@ -210,8 +221,15 @@ export async function handleSync(
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
 
+    const status =
+      errorMessage === "Forbidden"
+        ? 403
+        : errorMessage === "Playlist not found"
+          ? 404
+          : 500;
+
     return new Response(JSON.stringify({ error: errorMessage }), {
-      status: 500,
+      status,
       headers: { "Content-Type": "application/json" },
     });
   }

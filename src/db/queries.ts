@@ -227,6 +227,20 @@ export class Database {
     return result.results;
   }
 
+  async userHasPlaylistLink(
+    playlistId: number,
+    userId: number,
+  ): Promise<boolean> {
+    const result = await this.db
+      .prepare(
+        "SELECT 1 FROM playlist_links WHERE playlist_id = ? AND user_id = ? LIMIT 1",
+      )
+      .bind(playlistId, userId)
+      .first();
+
+    return !!result;
+  }
+
   async findPlaylistLink(
     playlistId: number,
     service: StreamingServiceType,

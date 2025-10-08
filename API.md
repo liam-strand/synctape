@@ -4,6 +4,8 @@
 
 All API endpoints that require authentication must include a JSON Web Token (JWT) in the `Authorization` header.
 
+JWT tokens are short-lived (15 minutes). Use the refresh workflow to obtain new access tokens without forcing a full login.
+
 **Example:**
 
 ```bash
@@ -19,7 +21,7 @@ To obtain a JWT, you must register or log in using the `/api/users` endpoint.
 
 ### POST /api/users
 
-Creates a new user or logs in an existing user. If the user's email already exists, they will be logged in. Otherwise, a new user will be created.
+Creates a new user or logs in an existing user. If the user's email already exists, they will be logged in. Otherwise, a new user will be created. Returns a token pair.
 
 **Request Body:**
 
@@ -34,7 +36,10 @@ Creates a new user or logs in an existing user. If the user's email already exis
 
 ```typescript
 {
-  token: string; // The JWT for the session
+  accessToken: string;
+  accessTokenExpiresIn: number; // seconds
+  refreshToken: string;
+  refreshTokenExpiresAt: number; // epoch seconds
 }
 ```
 
@@ -52,6 +57,87 @@ curl -X POST https://synctape.ltrs.xyz/api/users \
     "email": "test@example.com",
     "username": "testuser"
   }'
+```
+
+---
+
+### POST /api/users/refresh
+
+Exchanges a valid refresh token for a new access/refresh token pair. Refresh tokens are single-use and rotated automatically.
+
+**Request Body:**
+
+```typescript
+{
+  refreshToken: string;
+}
+```
+
+**Response (200 OK):**
+
+```typescript
+{
+  accessToken: string;
+  accessTokenExpiresIn: number;
+  refreshToken: string;
+  refreshTokenExpiresAt: number;
+}
+```
+
+**Error Responses:**
+
+- `400 Bad Request`: Missing refresh token.
+- `401 Unauthorized`: Refresh token expired, revoked, or invalid.
+
+**Example:**
+
+```bash
+curl -X POST https://synctape.ltrs.xyz/api/users/refresh \
+  -H "Content-Type: application/json" \
+  -d '{
+    "refreshToken": "<REFRESH_TOKEN>"
+  }'
+```
+
+---
+
+### POST /api/users/logout
+
+Revokes a refresh token.
+
+**Request Body:**
+
+```typescript
+{
+  refreshToken: string;
+}
+```
+
+**Response (200 OK):**
+
+```typescript
+{
+  success: true;
+}
+```
+
+**Error Responses:**
+
+- `400 Bad Request`: Missing or invalid refresh token.
+
+---
+
+### GET /api/users/config/token
+
+Returns current access and refresh token TTL configuration (seconds). Useful for clients to plan refresh scheduling.
+
+**Response (200 OK):**
+
+```typescript
+{
+  accessTokenTtlSeconds: number;
+  refreshTokenTtlSeconds: number;
+}
 ```
 
 ---
@@ -219,6 +305,8 @@ Synchronize a playlist across all linked streaming services.
 **Error Responses:**
 
 - `400 Bad Request`: Missing required field or no linked services
+- `401 Unauthorized`: Missing or invalid authentication
+- `403 Forbidden`: Playlist belongs to another user
 - `404 Not Found`: Playlist doesn't exist
 - `500 Internal Server Error`: All services failed to sync
 

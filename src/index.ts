@@ -4,6 +4,7 @@ import { handleShare } from "./api/share";
 import { handleCreate } from "./api/create";
 import { handleSync } from "./api/sync";
 import users from "./api/users";
+import { authMiddleware } from "./utils/auth";
 
 // Define the Hono app
 const app = new Hono<{ Bindings: Env }>();
@@ -13,15 +14,21 @@ app.use(
   "/api/*",
   cors({
     origin: "*",
-    allowHeaders: ["Content-Type", "X-User-Id", "Authorization"],
+    allowHeaders: ["Content-Type", "Authorization"],
     allowMethods: ["POST", "GET", "OPTIONS"],
   }),
 );
 
 // API routes
-app.post("/api/share", (c) => handleShare(c.req.raw, c.env));
-app.post("/api/create", (c) => handleCreate(c.req.raw, c.env));
-app.post("/api/sync", (c) => handleSync(c.req.raw, c.env));
+app.post("/api/share", authMiddleware, (c) =>
+  handleShare(c.req.raw, c.env, c.get("jwtPayload").userId),
+);
+app.post("/api/create", authMiddleware, (c) =>
+  handleCreate(c.req.raw, c.env, c.get("jwtPayload").userId),
+);
+app.post("/api/sync", authMiddleware, (c) =>
+  handleSync(c.req.raw, c.env, c.get("jwtPayload").userId),
+);
 app.route("/api/users", users);
 
 // Health check endpoint
