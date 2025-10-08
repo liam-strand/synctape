@@ -29,23 +29,6 @@ app.get('/health', (c) => {
   return c.json({ status: 'ok' });
 });
 
-// Not found handler (Hono handles this by default)
-app.notFound((c) => {
-  return c.json({ error: 'Not found' }, 404);
-});
-
-// Error handler
-app.onError((err, c) => {
-  console.error('Unhandled error:', err);
-  if (err instanceof Error && err.message.includes('Unauthorized')) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-  if (err instanceof Error && err.message.includes('jwt')) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-  return c.json({ error: 'Internal server error' }, 500);
-});
-
 export default {
   fetch: app.fetch,
 
