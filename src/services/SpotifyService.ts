@@ -146,7 +146,11 @@ export class SpotifyService implements StreamingService {
     }
 
     // Add remaining tracks in subsequent batches
-    for (let i = maxTracksPerRequest; i < trackUris.length; i += maxTracksPerRequest) {
+    for (
+      let i = maxTracksPerRequest;
+      i < trackUris.length;
+      i += maxTracksPerRequest
+    ) {
       const batch = trackUris.slice(i, i + maxTracksPerRequest);
       const addResponse = await this.makeUpdatePlaylistRequest(
         playlistId,
