@@ -1,3 +1,9 @@
+import {
+  SpotifyPlaylist,
+  SpotifyPlaylistTrack,
+  Paginated,
+  SpotifyUser,
+} from "./spotify-types";
 import { StreamingService } from "./StreamingService";
 import { TrackMetadata, PlaylistData } from "../utils/types";
 import { sign, verify } from "hono/jwt";
@@ -24,15 +30,56 @@ interface SpotifyTokenResponse {
 export class SpotifyService implements StreamingService {
   private readonly apiBaseUrl = "https://api.spotify.com/v1";
 
+  // Wrapper for global fetch to allow for easier mocking in tests
+  private _fetch(url: string, options?: RequestInit): Promise<Response> {
+    return fetch(url, options);
+  }
+
   async fetchPlaylist(
     playlistId: string,
     accessToken: string,
   ): Promise<PlaylistData> {
-    // TODO: Implement Spotify API call
-    // GET https://api.spotify.com/v1/playlists/{playlist_id}
-    console.log("SpotifyService.fetchPlaylist - STUB", { playlistId });
+    const url = `${this.apiBaseUrl}/playlists/${playlistId}`;
+    const response = await this._fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
 
-    throw new Error("SpotifyService.fetchPlaylist not yet implemented");
+    if (!response.ok) {
+      throw new Error(`Failed to fetch playlist: ${response.statusText}`);
+    }
+
+    const playlistData: SpotifyPlaylist = await response.json();
+    let tracks: SpotifyPlaylistTrack[] = playlistData.tracks.items;
+
+    // Handle pagination for playlists with more than 100 tracks
+    let nextUrl = playlistData.tracks.next;
+    while (nextUrl) {
+      const nextResponse = await this._fetch(nextUrl, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!nextResponse.ok) {
+        throw new Error(
+          `Failed to fetch next page of tracks: ${nextResponse.statusText}`,
+        );
+      }
+      const nextData: Paginated<SpotifyPlaylistTrack> =
+        await nextResponse.json();
+      tracks = tracks.concat(nextData.items);
+      nextUrl = nextData.next;
+    }
+
+    return {
+      name: playlistData.name,
+      description: playlistData.description,
+      tracks: tracks.map(({ track }) => ({
+        name: track.name,
+        artist: track.artists.map((a) => a.name).join(", "),
+        album: track.album.name,
+        isrc: track.isrc,
+        duration_ms: track.duration_ms,
+      })),
+      updatedAt: new Date(), // Or parse from response if available
+    };
   }
 
   async createPlaylist(
@@ -40,11 +87,39 @@ export class SpotifyService implements StreamingService {
     description: string,
     accessToken: string,
   ): Promise<string> {
-    // TODO: Implement Spotify API call
-    // POST https://api.spotify.com/v1/users/{user_id}/playlists
-    console.log("SpotifyService.createPlaylist - STUB", { name, description });
+    const userProfileResponse = await this._fetch(`${this.apiBaseUrl}/me`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
 
-    throw new Error("SpotifyService.createPlaylist not yet implemented");
+    if (!userProfileResponse.ok) {
+      throw new Error(
+        `Failed to fetch user profile: ${userProfileResponse.statusText}`,
+      );
+    }
+
+    const user: SpotifyUser = await userProfileResponse.json();
+    const userId = user.id;
+
+    const createPlaylistResponse = await this._fetch(
+      `${this.apiBaseUrl}/users/${userId}/playlists`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name, description, public: false }),
+      },
+    );
+
+    if (!createPlaylistResponse.ok) {
+      throw new Error(
+        `Failed to create playlist: ${createPlaylistResponse.statusText}`,
+      );
+    }
+
+    const newPlaylist: SpotifyPlaylist = await createPlaylistResponse.json();
+    return newPlaylist.id;
   }
 
   async updatePlaylistTracks(
@@ -52,14 +127,67 @@ export class SpotifyService implements StreamingService {
     trackIds: string[],
     accessToken: string,
   ): Promise<void> {
-    // TODO: Implement Spotify API call
-    // PUT https://api.spotify.com/v1/playlists/{playlist_id}/tracks
-    console.log("SpotifyService.updatePlaylistTracks - STUB", {
-      playlistId,
-      trackCount: trackIds.length,
-    });
+    const trackUris = trackIds.map((id) => `spotify:track:${id}`);
+    const maxTracksPerRequest = 100;
 
-    throw new Error("SpotifyService.updatePlaylistTracks not yet implemented");
+    // Replace the first 100 tracks
+    const firstBatch = trackUris.slice(0, maxTracksPerRequest);
+    const replaceResponse = await this.makeUpdatePlaylistRequest(
+      playlistId,
+      firstBatch,
+      accessToken,
+      "PUT",
+    );
+    if (!replaceResponse.ok) {
+      await this.handleRateLimit(replaceResponse);
+      throw new Error(
+        `Failed to replace playlist tracks: ${replaceResponse.statusText}`,
+      );
+    }
+
+    // Add remaining tracks in subsequent batches
+    for (let i = maxTracksPerRequest; i < trackUris.length; i += maxTracksPerRequest) {
+      const batch = trackUris.slice(i, i + maxTracksPerRequest);
+      const addResponse = await this.makeUpdatePlaylistRequest(
+        playlistId,
+        batch,
+        accessToken,
+        "POST",
+      );
+      if (!addResponse.ok) {
+        await this.handleRateLimit(addResponse);
+        throw new Error(
+          `Failed to add playlist tracks: ${addResponse.statusText}`,
+        );
+      }
+    }
+  }
+
+  private async makeUpdatePlaylistRequest(
+    playlistId: string,
+    trackUris: string[],
+    accessToken: string,
+    method: "PUT" | "POST",
+  ): Promise<Response> {
+    const url = `${this.apiBaseUrl}/playlists/${playlistId}/tracks`;
+    return this._fetch(url, {
+      method,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ uris: trackUris }),
+    });
+  }
+
+  private async handleRateLimit(response: Response): Promise<void> {
+    if (response.status === 429) {
+      const retryAfter = response.headers.get("Retry-After");
+      if (retryAfter) {
+        const delayMs = parseInt(retryAfter, 10) * 1000;
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
   }
 
   async searchTrack(
