@@ -37,6 +37,12 @@ app.notFound((c) => {
 // Error handler
 app.onError((err, c) => {
   console.error('Unhandled error:', err);
+  if (err instanceof Error && err.message.includes('Unauthorized')) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+  if (err instanceof Error && err.message.includes('jwt')) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
   return c.json({ error: 'Internal server error' }, 500);
 });
 
