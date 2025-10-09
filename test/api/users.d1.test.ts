@@ -98,4 +98,79 @@ describe("users API (real D1)", () => {
 
     expect(res.status).toBe(401);
   });
+
+  it("POST /api/users returns 400 if email is missing", async () => {
+    const res = await SELF.fetch("https://synctape.ltrs.xyz/api/users", {
+      method: "POST",
+      body: JSON.stringify({ username: "no-email" }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /api/users returns 409 if username is taken", async () => {
+    const res = await SELF.fetch("https://synctape.ltrs.xyz/api/users", {
+      method: "POST",
+      body: JSON.stringify({ email: "new@example.com", username: "alice" }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    expect(res.status).toBe(409);
+  });
+
+  it("POST /api/users/refresh returns 400 if token is missing", async () => {
+    const res = await SELF.fetch(
+      "https://synctape.ltrs.xyz/api/users/refresh",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      },
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it("POST /api/users/logout revokes a refresh token", async () => {
+    const loginRes = await SELF.fetch("https://synctape.ltrs.xyz/api/users", {
+      method: "POST",
+      body: JSON.stringify({
+        email: "logout@example.com",
+        username: "logout",
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+    const { refreshToken } = await loginRes.json();
+
+    const logoutRes = await SELF.fetch(
+      "https://synctape.ltrs.xyz/api/users/logout",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken }),
+      },
+    );
+    expect(logoutRes.status).toBe(200);
+
+    // The token should now be revoked
+    const refreshRes = await SELF.fetch(
+      "https://synctape.ltrs.xyz/api/users/refresh",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refreshToken }),
+      },
+    );
+    expect(refreshRes.status).toBe(401);
+  });
+
+  it("GET /api/users/config/token returns token TTLs", async () => {
+    const res = await SELF.fetch(
+      "https://synctape.ltrs.xyz/api/users/config/token",
+    );
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.accessTokenTtlSeconds).toBeGreaterThan(0);
+    expect(json.refreshTokenTtlSeconds).toBeGreaterThan(0);
+  });
 });
