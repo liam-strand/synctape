@@ -152,6 +152,10 @@ describe("users API (real D1)", () => {
     );
     expect(logoutRes.status).toBe(200);
 
+    const consoleErrorSpy = vi
+      .spyOn((globalThis as any).console, "error")
+      .mockImplementation(() => {});
+
     // The token should now be revoked
     const refreshRes = await SELF.fetch(
       "https://synctape.ltrs.xyz/api/users/refresh",
