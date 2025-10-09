@@ -176,4 +176,49 @@ describe("Playlists API (Integration)", () => {
     expect(remainingLinks.results).toHaveLength(1);
     expect(remainingLinks.results[0].track_id).toBe(trackIdsToRemove[1]);
   });
+
+  it("should return 400 when updating a playlist with an empty name", async () => {
+    const patchRes = await SELF.fetch(
+      "https://synctape.ltrs.xyz/api/playlists/1",
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name: "", description: "This should fail" }),
+      },
+    );
+    expect(patchRes.status).toBe(400);
+  });
+
+  it("should return 400 when adding an empty array of tracks", async () => {
+    const addTracksRes = await SELF.fetch(
+      "https://synctape.ltrs.xyz/api/playlists/2/tracks",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ tracks: [] }),
+      },
+    );
+    expect(addTracksRes.status).toBe(400);
+  });
+
+  it("should return 400 when removing an empty array of track IDs", async () => {
+    const removeTracksRes = await SELF.fetch(
+      "https://synctape.ltrs.xyz/api/playlists/2/tracks",
+      {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ trackIds: [] }),
+      },
+    );
+    expect(removeTracksRes.status).toBe(400);
+  });
 });
