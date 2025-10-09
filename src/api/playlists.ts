@@ -15,9 +15,8 @@ import {
   insertTrackQuery,
   removeTracksFromPlaylistQuery,
 } from "../db/queries";
-import type { AppType } from "../../env";
 
-const playlists = new Hono<AppType>();
+const playlists = new Hono<{ Bindings: Env }>();
 
 playlists.use("*", authMiddleware);
 
@@ -111,14 +110,17 @@ playlists.post("/:id/tracks", async (c) => {
 
   for (const track of tracks) {
     let trackId;
-    const existingTrack = await findTrackByIsrcQuery(
-      c.env.DB,
-      track.isrc,
-    ).first<{ id: number }>();
+    if (track.isrc) {
+      const existingTrack = await findTrackByIsrcQuery(
+        c.env.DB,
+        track.isrc,
+      ).first<{ id: number }>();
+      if (existingTrack) {
+        trackId = existingTrack.id;
+      }
+    }
 
-    if (existingTrack) {
-      trackId = existingTrack.id;
-    } else {
+    if (!trackId) {
       const newTrack = await insertTrackQuery(c.env.DB, track).first<{
         id: number;
       }>();

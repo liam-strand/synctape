@@ -11,9 +11,8 @@ import {
   handleSpotifyOAuthUrl,
   handleSpotifyRedirect,
 } from "./api/spotify";
-import type { AppType, Env } from "../env";
 
-const app = new Hono<AppType>();
+const app = new Hono<{ Bindings: Env }>();
 
 app.use(
   "/api/*",
@@ -26,13 +25,13 @@ app.use(
 
 // API routes
 app.post("/api/share", authMiddleware, (c) =>
-  handleShare(c.req.raw, c.env, c.get("jwtPayload").userId as any),
+  handleShare(c.req.raw, c.env, c.get("jwtPayload").userId),
 );
 app.post("/api/create", authMiddleware, (c) =>
-  handleCreate(c.req.raw, c.env, c.get("jwtPayload").userId as any),
+  handleCreate(c.req.raw, c.env, c.get("jwtPayload").userId),
 );
 app.post("/api/sync", authMiddleware, (c) =>
-  handleSync(c.req.raw, c.env, c.get("jwtPayload").userId as any),
+  handleSync(c.req.raw, c.env, c.get("jwtPayload").userId),
 );
 app.route("/api/users", users);
 app.route("/api/playlists", playlists);

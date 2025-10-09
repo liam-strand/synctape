@@ -2,9 +2,9 @@ export const getPlaylistsQuery = (db: D1Database, userId: string) => {
   return db
     .prepare(
       `
-      SELECT id, name, description, image_url, last_synced_at
+      SELECT id, name, description, last_synced_at
       FROM playlists
-      WHERE user_id = ?
+      WHERE owner_id = ?
     `,
     )
     .bind(userId);
@@ -18,9 +18,9 @@ export const getPlaylistQuery = (
   return db
     .prepare(
       `
-      SELECT id, name, description, image_url, last_synced_at
+      SELECT id, name, description, last_synced_at
       FROM playlists
-      WHERE id = ? AND user_id = ?
+      WHERE id = ? AND owner_id = ?
     `,
     )
     .bind(playlistId, userId);
@@ -30,10 +30,11 @@ export const getPlaylistTracksQuery = (db: D1Database, playlistId: string) => {
   return db
     .prepare(
       `
-      SELECT t.id, t.name, t.artist, t.album, t.image_url, t.duration_ms
+      SELECT t.id, t.name, t.artist, t.album, t.duration_ms
       FROM tracks t
       JOIN playlist_tracks pt ON t.id = pt.track_id
       WHERE pt.playlist_id = ?
+      ORDER BY pt.position
     `,
     )
     .bind(playlistId);
@@ -51,7 +52,7 @@ export const updatePlaylistQuery = (
       `
       UPDATE playlists
       SET name = ?, description = ?
-      WHERE id = ? AND user_id = ?
+      WHERE id = ? AND owner_id = ?
     `,
     )
     .bind(name, description, playlistId, userId);
@@ -76,7 +77,7 @@ export const deletePlaylistQuery = (
   playlistId: string,
   userId: string,
 ) => {
-  return db.prepare("DELETE FROM playlists WHERE id = ? AND user_id = ?").bind(playlistId, userId);
+  return db.prepare("DELETE FROM playlists WHERE id = ? AND owner_id = ?").bind(playlistId, userId);
 };
 
 export const checkPlaylistOwnershipQuery = (
@@ -85,7 +86,7 @@ export const checkPlaylistOwnershipQuery = (
   userId: string,
 ) => {
   return db
-    .prepare("SELECT id FROM playlists WHERE id = ? AND user_id = ?")
+    .prepare("SELECT id FROM playlists WHERE id = ? AND owner_id = ?")
     .bind(playlistId, userId);
 };
 
