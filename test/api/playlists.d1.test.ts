@@ -6,9 +6,7 @@ describe("Playlists API (Integration)", () => {
   let testUserId: string;
 
   beforeAll(async () => {
-    const user = await env.DB.prepare(
-      "SELECT id FROM users WHERE email = ?",
-    )
+    const user = await env.DB.prepare("SELECT id FROM users WHERE email = ?")
       .bind("alice@example.com")
       .first<{ id: string }>();
     testUserId = user!.id;

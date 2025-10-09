@@ -57,7 +57,9 @@ export async function matchOrCreateTrack(
   // Set the service-specific ID
   trackData[`${service}_id`] = serviceTrackId;
 
-  const newTrack = await insertTrackQuery(db, trackData).first<{ id: number }>();
+  const newTrack = await insertTrackQuery(db, trackData).first<{
+    id: number;
+  }>();
   if (!newTrack) {
     throw new Error("Failed to create track");
   }

@@ -62,14 +62,18 @@ export const deletePlaylistTracksQuery = (
   db: D1Database,
   playlistId: string,
 ) => {
-  return db.prepare("DELETE FROM playlist_tracks WHERE playlist_id = ?").bind(playlistId);
+  return db
+    .prepare("DELETE FROM playlist_tracks WHERE playlist_id = ?")
+    .bind(playlistId);
 };
 
 export const deletePlaylistLinksQuery = (
   db: D1Database,
   playlistId: string,
 ) => {
-  return db.prepare("DELETE FROM playlist_links WHERE playlist_id = ?").bind(playlistId);
+  return db
+    .prepare("DELETE FROM playlist_links WHERE playlist_id = ?")
+    .bind(playlistId);
 };
 
 export const deletePlaylistQuery = (
@@ -77,7 +81,9 @@ export const deletePlaylistQuery = (
   playlistId: string,
   userId: string,
 ) => {
-  return db.prepare("DELETE FROM playlists WHERE id = ? AND owner_id = ?").bind(playlistId, userId);
+  return db
+    .prepare("DELETE FROM playlists WHERE id = ? AND owner_id = ?")
+    .bind(playlistId, userId);
 };
 
 export const checkPlaylistOwnershipQuery = (
@@ -130,7 +136,9 @@ export const getMaxPlaylistPositionQuery = (
   playlistId: string,
 ) => {
   return db
-    .prepare("SELECT MAX(position) as max_position FROM playlist_tracks WHERE playlist_id = ?")
+    .prepare(
+      "SELECT MAX(position) as max_position FROM playlist_tracks WHERE playlist_id = ?",
+    )
     .bind(playlistId);
 };
 
@@ -170,7 +178,9 @@ export const userHasPlaylistLinkQuery = (
   userId: number,
 ) => {
   return db
-    .prepare("SELECT 1 FROM playlist_links WHERE playlist_id = ? AND user_id = ?")
+    .prepare(
+      "SELECT 1 FROM playlist_links WHERE playlist_id = ? AND user_id = ?",
+    )
     .bind(playlistId, userId);
 };
 
@@ -235,7 +245,9 @@ export const setPlaylistTracksQuery = (
   trackIds: number[],
 ) => {
   const stmts = [
-    db.prepare("DELETE FROM playlist_tracks WHERE playlist_id = ?").bind(playlistId),
+    db
+      .prepare("DELETE FROM playlist_tracks WHERE playlist_id = ?")
+      .bind(playlistId),
   ];
   trackIds.forEach((trackId, index) => {
     stmts.push(
@@ -254,7 +266,9 @@ export const updatePlaylistSyncTimestampQuery = (
   playlistId: number,
 ) => {
   return db
-    .prepare("UPDATE playlists SET last_synced_at = strftime('%s', 'now') WHERE id = ?")
+    .prepare(
+      "UPDATE playlists SET last_synced_at = strftime('%s', 'now') WHERE id = ?",
+    )
     .bind(playlistId);
 };
 
@@ -263,6 +277,8 @@ export const updatePlaylistLinkSyncTimestampQuery = (
   linkId: number,
 ) => {
   return db
-    .prepare("UPDATE playlist_links SET last_synced_at = strftime('%s', 'now') WHERE id = ?")
+    .prepare(
+      "UPDATE playlist_links SET last_synced_at = strftime('%s', 'now') WHERE id = ?",
+    )
     .bind(linkId);
 };
