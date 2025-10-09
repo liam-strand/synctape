@@ -33,6 +33,7 @@
     "seedLocalD1": "wrangler d1 migrations apply DB --local"
   },
   "dependencies": {
+    "@sentry/cloudflare": "^10.19.0",
     "hono": "^4.9.10"
   }
 }
