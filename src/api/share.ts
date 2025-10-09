@@ -1,8 +1,12 @@
-import { Database } from "../db/queries";
 import { ServiceFactory } from "../services/ServiceFactory";
 import { matchOrCreateTrack } from "../utils/trackMatching";
 import { StreamingServiceType } from "../utils/types";
 import { getServiceAccessToken } from "../utils/auth";
+import {
+  createPlaylistQuery,
+  createPlaylistLinkQuery,
+  setPlaylistTracksQuery,
+} from "../db/queries";
 
 /**
  * POST /api/share
@@ -43,8 +47,6 @@ export async function handleShare(
       );
     }
 
-    const db = new Database(env.DB);
-
     // Get the user's access token for this service
     const accessToken = await getServiceAccessToken(
       env,
@@ -71,37 +73,43 @@ export async function handleShare(
     );
 
     // Create a new playlist in our database
-    const internalPlaylistId = await db.createPlaylist(
+    const newPlaylist = await createPlaylistQuery(
+      env.DB,
       playlistData.name,
       playlistData.description,
       userId,
-    );
+    ).first<{ id: number }>();
+
+    if (!newPlaylist) {
+      throw new Error("Failed to create playlist");
+    }
+    const internalPlaylistId = newPlaylist.id;
 
     // Create the playlist link (mark as source since this is the original)
-    await db.createPlaylistLink(
+    await createPlaylistLinkQuery(
+      env.DB,
       internalPlaylistId,
       userId,
       service,
       playlistId,
       true,
-    );
+    ).run();
 
     // Process and add tracks
     const trackIds: number[] = [];
 
     for (const trackMetadata of playlistData.tracks) {
-      const serviceTrackId = "TODO"; // This needs to come from the API response
       const trackId = await matchOrCreateTrack(
-        db,
+        env.DB,
         trackMetadata,
         service,
-        serviceTrackId,
+        trackMetadata.id,
       );
       trackIds.push(trackId);
     }
 
     // Set the playlist tracks
-    await db.setPlaylistTracks(internalPlaylistId, trackIds);
+    await setPlaylistTracksQuery(env.DB, internalPlaylistId, trackIds);
 
     return new Response(
       JSON.stringify({

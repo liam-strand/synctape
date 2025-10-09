@@ -4,19 +4,17 @@ import { handleShare } from "./api/share";
 import { handleCreate } from "./api/create";
 import { handleSync } from "./api/sync";
 import users from "./api/users";
-import { createPlaylistsRouter } from "./api/playlists";
+import playlists from "./api/playlists";
 import { authMiddleware } from "./utils/auth";
 import {
   handleSpotifyCallback,
   handleSpotifyOAuthUrl,
   handleSpotifyRedirect,
 } from "./api/spotify";
-import { PlaylistService } from "./services/playlist-service";
+import type { AppType, Env } from "../env";
 
-// Define the Hono app
-const app = new Hono<{ Bindings: Env }>();
+const app = new Hono<AppType>();
 
-// Setup CORS middleware
 app.use(
   "/api/*",
   cors({
@@ -26,23 +24,18 @@ app.use(
   }),
 );
 
-// Instantiate services
-const playlistService = new PlaylistService(app.get("env"));
-
 // API routes
 app.post("/api/share", authMiddleware, (c) =>
-  handleShare(c.req.raw, c.env, c.get("jwtPayload").userId),
+  handleShare(c.req.raw, c.env, c.get("jwtPayload").userId as any),
 );
 app.post("/api/create", authMiddleware, (c) =>
-  handleCreate(c.req.raw, c.env, c.get("jwtPayload").userId),
+  handleCreate(c.req.raw, c.env, c.get("jwtPayload").userId as any),
 );
 app.post("/api/sync", authMiddleware, (c) =>
-  handleSync(c.req.raw, c.env, c.get("jwtPayload").userId),
+  handleSync(c.req.raw, c.env, c.get("jwtPayload").userId as any),
 );
 app.route("/api/users", users);
-
-const playlistsRouter = createPlaylistsRouter(authMiddleware, playlistService);
-app.route("/api/playlists", playlistsRouter);
+app.route("/api/playlists", playlists);
 
 app.get("/api/spotify/oauth-url", authMiddleware, handleSpotifyOAuthUrl);
 
@@ -63,10 +56,6 @@ app.get("/health", (c) => {
 export default {
   fetch: app.fetch,
 
-  /**
-   * Scheduled handler for periodic sync jobs
-   * Triggered by Cloudflare cron triggers
-   */
   async scheduled(
     controller: ScheduledController,
     env: Env,
@@ -86,7 +75,6 @@ export default {
 
       for (const playlist of results) {
         try {
-          // Create a mock request for handleSync
           const mockRequest = new Request(
             "https://synctape.ltrs.xyz/api/sync",
             {

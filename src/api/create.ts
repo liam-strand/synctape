@@ -1,11 +1,17 @@
-import { Database } from "../db/queries";
 import { ServiceFactory } from "../services/ServiceFactory";
 import {
   getTrackServiceId,
   filterTracksForService,
 } from "../utils/trackMatching";
-import { StreamingServiceType } from "../utils/types";
+import { StreamingServiceType, Track } from "../utils/types";
 import { getServiceAccessToken } from "../utils/auth";
+import {
+  createPlaylistLinkQuery,
+  getPlaylistByIdQuery,
+  getPlaylistLinksQuery,
+  getPlaylistTracksQuery,
+  userHasPlaylistLinkQuery,
+} from "../db/queries";
 
 /**
  * POST /api/create
@@ -45,10 +51,8 @@ export async function handleCreate(
       );
     }
 
-    const db = new Database(env.DB);
-
     // Get the playlist
-    const playlist = await db.getPlaylistById(playlistId);
+    const playlist = await getPlaylistByIdQuery(env.DB, playlistId).first();
 
     if (!playlist) {
       return new Response(JSON.stringify({ error: "Playlist not found" }), {
@@ -58,7 +62,11 @@ export async function handleCreate(
     }
 
     if (playlist.owner_id !== userId) {
-      const hasAccess = await db.userHasPlaylistLink(playlistId, userId);
+      const hasAccess = await userHasPlaylistLinkQuery(
+        env.DB,
+        playlistId,
+        userId,
+      ).first();
       if (!hasAccess) {
         return new Response(JSON.stringify({ error: "Forbidden" }), {
           status: 403,
@@ -68,9 +76,12 @@ export async function handleCreate(
     }
 
     // Check if a link already exists for this service
-    const existingLinks = await db.getPlaylistLinks(playlistId);
+    const { results: existingLinks } = await getPlaylistLinksQuery(
+      env.DB,
+      playlistId,
+    ).all();
     const existingLink = existingLinks.find(
-      (link) => link.service === service && link.user_id === userId,
+      (link: any) => link.service === service && link.user_id === userId,
     );
 
     if (existingLink) {
@@ -102,7 +113,10 @@ export async function handleCreate(
     }
 
     // Get playlist tracks
-    const tracks = await db.getPlaylistTracks(playlistId);
+    const { results: tracks } = await getPlaylistTracksQuery(
+      env.DB,
+      playlistId.toString(),
+    ).all<Track>();
 
     // Filter tracks to only those available on this service
     const availableTracks = filterTracksForService(tracks, service);
@@ -116,8 +130,8 @@ export async function handleCreate(
     // Create playlist on the streaming service
     const streamingService = ServiceFactory.getService(service);
     const servicePlaylistId = await streamingService.createPlaylist(
-      playlist.name,
-      playlist.description || "",
+      playlist.name as string,
+      (playlist.description as string) || "",
       accessToken,
     );
 
@@ -131,13 +145,14 @@ export async function handleCreate(
     }
 
     // Create the playlist link in our database
-    await db.createPlaylistLink(
+    await createPlaylistLinkQuery(
+      env.DB,
       playlistId,
       userId,
       service,
       servicePlaylistId,
       false,
-    );
+    ).run();
 
     return new Response(
       JSON.stringify({

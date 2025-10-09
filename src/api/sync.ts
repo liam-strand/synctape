@@ -1,12 +1,20 @@
-import { Database } from "../db/queries";
 import { ServiceFactory } from "../services/ServiceFactory";
 import {
   matchOrCreateTrack,
   getTrackServiceId,
   filterTracksForService,
 } from "../utils/trackMatching";
-import { PlaylistLink } from "../utils/types";
+import { PlaylistLink, Track } from "../utils/types";
 import { getServiceAccessToken } from "../utils/auth";
+import {
+  getPlaylistByIdQuery,
+  getPlaylistLinksQuery,
+  getPlaylistTracksQuery,
+  setPlaylistTracksQuery,
+  updatePlaylistLinkSyncTimestampQuery,
+  updatePlaylistSyncTimestampQuery,
+  userHasPlaylistLinkQuery,
+} from "../db/queries";
 
 /**
  * POST /api/sync
@@ -36,10 +44,8 @@ export async function handleSync(
       );
     }
 
-    const db = new Database(env.DB);
-
     // Get the playlist
-    const playlist = await db.getPlaylistById(playlistId);
+    const playlist = await getPlaylistByIdQuery(env.DB, playlistId).first();
 
     if (!playlist) {
       return new Response(JSON.stringify({ error: "Playlist not found" }), {
@@ -49,7 +55,11 @@ export async function handleSync(
     }
 
     if (userId && playlist.owner_id !== userId) {
-      const hasAccess = await db.userHasPlaylistLink(playlistId, userId);
+      const hasAccess = await userHasPlaylistLinkQuery(
+        env.DB,
+        playlistId,
+        userId,
+      ).first();
       if (!hasAccess) {
         return new Response(JSON.stringify({ error: "Forbidden" }), {
           status: 403,
@@ -59,7 +69,10 @@ export async function handleSync(
     }
 
     // Get all linked services for this playlist
-    const links = await db.getPlaylistLinks(playlistId);
+    const { results: links } = await getPlaylistLinksQuery(
+      env.DB,
+      playlistId,
+    ).all<PlaylistLink>();
 
     if (links.length === 0) {
       return new Response(
@@ -130,28 +143,29 @@ export async function handleSync(
     const trackIds: number[] = [];
 
     for (const trackMetadata of mostRecentData.tracks) {
-      const serviceTrackId = "TODO";
-
       const trackId = await matchOrCreateTrack(
-        db,
+        env.DB,
         trackMetadata,
         mostRecentLink.service,
-        serviceTrackId,
+        trackMetadata.id,
       );
       trackIds.push(trackId);
     }
 
-    await db.setPlaylistTracks(playlistId, trackIds);
-    await db.updatePlaylistSyncTimestamp(playlistId);
+    await setPlaylistTracksQuery(env.DB, playlistId, trackIds);
+    await updatePlaylistSyncTimestampQuery(env.DB, playlistId).run();
 
-    const tracks = await db.getPlaylistTracks(playlistId);
+    const { results: tracks } = await getPlaylistTracksQuery(
+      env.DB,
+      playlistId.toString(),
+    ).all<Track>();
 
     // Propagate to all other services
     const syncedServices: string[] = [mostRecentLink.service];
 
     for (const link of links) {
       if (link.id === mostRecentLink.id) {
-        await db.updatePlaylistLinkSyncTimestamp(link.id);
+        await updatePlaylistLinkSyncTimestampQuery(env.DB, link.id).run();
         continue;
       }
 
@@ -179,7 +193,7 @@ export async function handleSync(
           accessToken,
         );
 
-        await db.updatePlaylistLinkSyncTimestamp(link.id);
+        await updatePlaylistLinkSyncTimestampQuery(env.DB, link.id).run();
         syncedServices.push(link.service);
       } catch (error) {
         const errorMessage =

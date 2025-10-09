@@ -99,10 +99,11 @@ export const insertTrackQuery = (
     name: string;
     artist: string;
     album: string;
-    isrc: string;
-    duration_ms: number;
-    image_url: string;
+    isrc?: string;
+    duration_ms?: number;
+    image_url?: string | null;
     spotify_id?: string;
+    [key: string]: any;
   },
 ) => {
   return db
@@ -116,10 +117,10 @@ export const insertTrackQuery = (
       track.name,
       track.artist,
       track.album,
-      track.isrc,
-      track.duration_ms,
-      track.image_url,
-      track.spotify_id,
+      track.isrc || null,
+      track.duration_ms || null,
+      track.image_url || null,
+      track.spotify_id || null,
     );
 };
 
@@ -156,4 +157,111 @@ export const removeTracksFromPlaylistQuery = (
       `DELETE FROM playlist_tracks WHERE playlist_id = ? AND track_id IN (${placeholders})`,
     )
     .bind(playlistId, ...trackIds);
+};
+
+export const getPlaylistByIdQuery = (db: D1Database, playlistId: number) => {
+  return db.prepare("SELECT * FROM playlists WHERE id = ?").bind(playlistId);
+};
+
+export const userHasPlaylistLinkQuery = (
+  db: D1Database,
+  playlistId: number,
+  userId: number,
+) => {
+  return db
+    .prepare("SELECT 1 FROM playlist_links WHERE playlist_id = ? AND user_id = ?")
+    .bind(playlistId, userId);
+};
+
+export const getPlaylistLinksQuery = (db: D1Database, playlistId: number) => {
+  return db
+    .prepare("SELECT * FROM playlist_links WHERE playlist_id = ?")
+    .bind(playlistId);
+};
+
+export const createPlaylistLinkQuery = (
+  db: D1Database,
+  playlistId: number,
+  userId: number,
+  service: string,
+  servicePlaylistId: string,
+  isSource: boolean,
+) => {
+  return db
+    .prepare(
+      "INSERT INTO playlist_links (playlist_id, user_id, service, service_playlist_id, is_source) VALUES (?, ?, ?, ?, ?)",
+    )
+    .bind(playlistId, userId, service, servicePlaylistId, isSource ? 1 : 0);
+};
+
+export const createPlaylistQuery = (
+  db: D1Database,
+  name: string,
+  description: string | null,
+  ownerId: number,
+) => {
+  return db
+    .prepare(
+      "INSERT INTO playlists (name, description, owner_id) VALUES (?, ?, ?) RETURNING id",
+    )
+    .bind(name, description, ownerId);
+};
+
+export const findTrackByServiceIdQuery = (
+  db: D1Database,
+  service: string,
+  serviceTrackId: string,
+) => {
+  return db
+    .prepare(`SELECT * FROM tracks WHERE ${service}_id = ?`)
+    .bind(serviceTrackId);
+};
+
+export const updateTrackServiceIdQuery = (
+  db: D1Database,
+  trackId: number,
+  service: string,
+  serviceTrackId: string,
+) => {
+  return db
+    .prepare(`UPDATE tracks SET ${service}_id = ? WHERE id = ?`)
+    .bind(serviceTrackId, trackId);
+};
+
+export const setPlaylistTracksQuery = (
+  db: D1Database,
+  playlistId: number,
+  trackIds: number[],
+) => {
+  const stmts = [
+    db.prepare("DELETE FROM playlist_tracks WHERE playlist_id = ?").bind(playlistId),
+  ];
+  trackIds.forEach((trackId, index) => {
+    stmts.push(
+      db
+        .prepare(
+          "INSERT INTO playlist_tracks (playlist_id, track_id, position) VALUES (?, ?, ?)",
+        )
+        .bind(playlistId, trackId, index),
+    );
+  });
+  return db.batch(stmts);
+};
+
+export const updatePlaylistSyncTimestampQuery = (
+  db: D1Database,
+  playlistId: number,
+) => {
+  return db
+    .prepare("UPDATE playlists SET last_synced_at = strftime('%s', 'now') WHERE id = ?")
+    .bind(playlistId);
+};
+
+export const updatePlaylistLinkSyncTimestampQuery = (
+  db: D1Database,
+  linkId: number,
+) => {
+  return db
+    .prepare("UPDATE playlist_links SET last_synced_at = strftime('%s', 'now') WHERE id = ?")
+    .bind(linkId);
 };

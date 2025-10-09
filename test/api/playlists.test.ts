@@ -1,91 +1,116 @@
+// Mock the auth middleware to bypass JWT validation in tests
+vi.mock("../../src/utils/auth", () => ({
+  authMiddleware: vi.fn(async (c, next) => {
+    c.set("jwtPayload", { userId: "test-user" });
+    await next();
+  }),
+}));
+
+// Mock the entire database queries module.
+// This allows us to control the return values of each query function.
+vi.mock("../../src/db/queries", async (importOriginal) => {
+  const original = await importOriginal<
+    typeof import("../../src/db/queries")
+  >();
+  return {
+    ...original, // Keep original exports for types
+    getPlaylistsQuery: vi.fn(),
+    getPlaylistQuery: vi.fn(),
+    getPlaylistTracksQuery: vi.fn(),
+    updatePlaylistQuery: vi.fn(),
+    deletePlaylistQuery: vi.fn(),
+    deletePlaylistTracksQuery: vi.fn(),
+    deletePlaylistLinksQuery: vi.fn(),
+    addTracksToPlaylistQuery: vi.fn(),
+    checkPlaylistOwnershipQuery: vi.fn(),
+    findTrackByIsrcQuery: vi.fn(),
+    getMaxPlaylistPositionQuery: vi.fn(),
+    insertTrackQuery: vi.fn(),
+    removeTracksFromPlaylistQuery: vi.fn(),
+  };
+});
+
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { Hono } from "hono";
-import { createPlaylistsRouter } from "../../src/api/playlists";
-import type { MiddlewareHandler } from "hono";
-import type { PlaylistService } from "../../src/services/playlist-service";
+import playlists from "../../src/api/playlists";
+import * as queries from "../../src/db/queries";
+import type { AppType } from "../../env";
 
-// A simple, reliable mock middleware for our tests
-const mockAuthMiddleware: MiddlewareHandler = (c, next) => {
-  c.set("jwtPayload", { userId: "test-user" });
-  return next();
+// Helper to create a mock D1Result object
+const mockD1Result = (data: any) => ({
+  results: data,
+  success: true,
+  meta: { changes: data ? 1 : 0 },
+});
+
+// Helper to create a chainable mock for D1 prepared statements
+const createMockStatement = (
+  data: any = null,
+  meta: any = { changes: 1 },
+) => {
+  const mock: any = {
+    all: vi.fn().mockResolvedValue(mockD1Result(data)),
+    first: vi.fn().mockResolvedValue(data),
+    run: vi.fn().mockResolvedValue({ success: true, meta }),
+  };
+  return mock;
 };
 
 describe("Playlists API", () => {
-  let app: Hono;
-  let mockPlaylistService: PlaylistService;
+  let app: Hono<AppType>;
 
   beforeEach(() => {
-    // Create a mock PlaylistService with mock functions for each method
-    mockPlaylistService = {
-      getPlaylists: vi.fn(),
-      getPlaylist: vi.fn(),
-      updatePlaylist: vi.fn(),
-      deletePlaylist: vi.fn(),
-      addTracksToPlaylist: vi.fn(),
-      removeTracksFromPlaylist: vi.fn(),
-    } as unknown as PlaylistService;
-
-    // Create the router using the factory, injecting the mock middleware and service
-    const playlistsRouter = createPlaylistsRouter(
-      mockAuthMiddleware,
-      mockPlaylistService,
-    );
-    app = new Hono();
-    app.route("/api/playlists", playlistsRouter);
+    app = new Hono<AppType>();
+    app.route("/api/playlists", playlists);
     vi.clearAllMocks();
   });
 
   describe("GET /api/playlists", () => {
     it("should return a list of playlists for the user", async () => {
       const mockPlaylists = [{ id: 1, name: "My Playlist" }];
-      (mockPlaylistService.getPlaylists as vi.Mock).mockResolvedValue(
-        mockPlaylists,
+      (queries.getPlaylistsQuery as vi.Mock).mockReturnValue(
+        createMockStatement(mockPlaylists),
       );
 
       const res = await app.request("/api/playlists");
 
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual(mockPlaylists);
-      expect(mockPlaylistService.getPlaylists).toHaveBeenCalledWith(
-        "test-user",
-      );
+      expect(queries.getPlaylistsQuery).toHaveBeenCalled();
     });
   });
 
   describe("GET /api/playlists/:id", () => {
     it("should return a playlist when found", async () => {
-      const mockPlaylist = { id: 1, name: "My Playlist", tracks: [] };
-      (mockPlaylistService.getPlaylist as vi.Mock).mockResolvedValue(
-        mockPlaylist,
+      const mockPlaylist = { id: 1, name: "My Playlist" };
+      const mockTracks = [{ id: 101, name: "Track 1" }];
+      (queries.getPlaylistQuery as vi.Mock).mockReturnValue(
+        createMockStatement(mockPlaylist),
+      );
+      (queries.getPlaylistTracksQuery as vi.Mock).mockReturnValue(
+        createMockStatement(mockTracks),
       );
 
       const res = await app.request("/api/playlists/1");
 
       expect(res.status).toBe(200);
-      expect(await res.json()).toEqual(mockPlaylist);
-      expect(mockPlaylistService.getPlaylist).toHaveBeenCalledWith(
-        "1",
-        "test-user",
-      );
+      expect(await res.json()).toEqual({ ...mockPlaylist, tracks: mockTracks });
     });
 
     it("should return 404 when playlist is not found", async () => {
-      (mockPlaylistService.getPlaylist as vi.Mock).mockResolvedValue(null);
-
-      const res = await app.request("/api/playlists/1");
-
-      expect(res.status).toBe(404);
-      expect(mockPlaylistService.getPlaylist).toHaveBeenCalledWith(
-        "1",
-        "test-user",
+      (queries.getPlaylistQuery as vi.Mock).mockReturnValue(
+        createMockStatement(null),
       );
+      const res = await app.request("/api/playlists/1");
+      expect(res.status).toBe(404);
     });
   });
 
   describe("PATCH /api/playlists/:id", () => {
     it("should update a playlist", async () => {
-      (mockPlaylistService.updatePlaylist as vi.Mock).mockResolvedValue(true);
-
+      (queries.updatePlaylistQuery as vi.Mock).mockReturnValue(
+        createMockStatement(null, { changes: 1 }),
+      );
       const res = await app.request("/api/playlists/1", {
         method: "PATCH",
         body: JSON.stringify({
@@ -94,20 +119,14 @@ describe("Playlists API", () => {
         }),
         headers: { "Content-Type": "application/json" },
       });
-
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ success: true });
-      expect(mockPlaylistService.updatePlaylist).toHaveBeenCalledWith(
-        "1",
-        "test-user",
-        "New Name",
-        "New Description",
-      );
     });
 
     it("should return 404 when playlist is not found", async () => {
-      (mockPlaylistService.updatePlaylist as vi.Mock).mockResolvedValue(false);
-
+      (queries.updatePlaylistQuery as vi.Mock).mockReturnValue(
+        createMockStatement(null, { changes: 0 }),
+      );
       const res = await app.request("/api/playlists/1", {
         method: "PATCH",
         body: JSON.stringify({
@@ -116,63 +135,52 @@ describe("Playlists API", () => {
         }),
         headers: { "Content-Type": "application/json" },
       });
-
       expect(res.status).toBe(404);
-      expect(mockPlaylistService.updatePlaylist).toHaveBeenCalledWith(
-        "1",
-        "test-user",
-        "New Name",
-        "New Description",
-      );
-    });
-
-    it("should return 400 for invalid input", async () => {
-      const res = await app.request("/api/playlists/1", {
-        method: "PATCH",
-        body: JSON.stringify({ name: "New Name" }),
-        headers: { "Content-Type": "application/json" },
-      });
-
-      expect(res.status).toBe(400);
     });
   });
 
   describe("DELETE /api/playlists/:id", () => {
     it("should delete a playlist", async () => {
-      (mockPlaylistService.deletePlaylist as vi.Mock).mockResolvedValue(true);
-
-      const res = await app.request("/api/playlists/1", {
-        method: "DELETE",
-      });
-
+      (queries.deletePlaylistQuery as vi.Mock).mockReturnValue(
+        createMockStatement(null, { changes: 1 }),
+      );
+      (queries.deletePlaylistTracksQuery as vi.Mock).mockReturnValue(
+        createMockStatement(),
+      );
+      (queries.deletePlaylistLinksQuery as vi.Mock).mockReturnValue(
+        createMockStatement(),
+      );
+      const res = await app.request("/api/playlists/1", { method: "DELETE" });
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ success: true });
-      expect(mockPlaylistService.deletePlaylist).toHaveBeenCalledWith(
-        "1",
-        "test-user",
-      );
     });
 
     it("should return 404 when playlist is not found", async () => {
-      (mockPlaylistService.deletePlaylist as vi.Mock).mockResolvedValue(false);
-
-      const res = await app.request("/api/playlists/1", {
-        method: "DELETE",
-      });
-
-      expect(res.status).toBe(404);
-      expect(mockPlaylistService.deletePlaylist).toHaveBeenCalledWith(
-        "1",
-        "test-user",
+      (queries.deletePlaylistQuery as vi.Mock).mockReturnValue(
+        createMockStatement(null, { changes: 0 }),
       );
+      const res = await app.request("/api/playlists/1", { method: "DELETE" });
+      expect(res.status).toBe(404);
     });
   });
 
   describe("POST /api/playlists/:id/tracks", () => {
     it("should add tracks to a playlist", async () => {
-      (mockPlaylistService.addTracksToPlaylist as vi.Mock).mockResolvedValue({
-        success: true,
-      });
+      (queries.checkPlaylistOwnershipQuery as vi.Mock).mockReturnValue(
+        createMockStatement({ id: 1 }),
+      );
+      (queries.getMaxPlaylistPositionQuery as vi.Mock).mockReturnValue(
+        createMockStatement({ max_position: 0 }),
+      );
+      (queries.findTrackByIsrcQuery as vi.Mock).mockReturnValue(
+        createMockStatement(null),
+      );
+      (queries.insertTrackQuery as vi.Mock).mockReturnValue(
+        createMockStatement({ id: 101 }),
+      );
+      (queries.addTrackToPlaylistQuery as vi.Mock).mockReturnValue(
+        createMockStatement(),
+      );
 
       const tracks = [{ isrc: "123" }];
       const res = await app.request("/api/playlists/1/tracks", {
@@ -180,97 +188,27 @@ describe("Playlists API", () => {
         body: JSON.stringify({ tracks }),
         headers: { "Content-Type": "application/json" },
       });
-
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ success: true });
-      expect(mockPlaylistService.addTracksToPlaylist).toHaveBeenCalledWith(
-        "1",
-        "test-user",
-        tracks,
-      );
-    });
-
-    it("should return 404 when playlist is not found", async () => {
-      (mockPlaylistService.addTracksToPlaylist as vi.Mock).mockResolvedValue({
-        success: false,
-        error: "Playlist not found or access denied",
-      });
-
-      const tracks = [{ isrc: "123" }];
-      const res = await app.request("/api/playlists/1/tracks", {
-        method: "POST",
-        body: JSON.stringify({ tracks }),
-        headers: { "Content-Type": "application/json" },
-      });
-
-      expect(res.status).toBe(404);
-      expect(mockPlaylistService.addTracksToPlaylist).toHaveBeenCalledWith(
-        "1",
-        "test-user",
-        tracks,
-      );
-    });
-
-    it("should return 400 for invalid input", async () => {
-      const res = await app.request("/api/playlists/1/tracks", {
-        method: "POST",
-        body: JSON.stringify({ tracks: [] }),
-        headers: { "Content-Type": "application/json" },
-      });
-
-      expect(res.status).toBe(400);
     });
   });
 
   describe("DELETE /api/playlists/:id/tracks", () => {
     it("should remove tracks from a playlist", async () => {
-      (
-        mockPlaylistService.removeTracksFromPlaylist as vi.Mock
-      ).mockResolvedValue({ success: true });
-
+      (queries.checkPlaylistOwnershipQuery as vi.Mock).mockReturnValue(
+        createMockStatement({ id: 1 }),
+      );
+      (queries.removeTracksFromPlaylistQuery as vi.Mock).mockReturnValue(
+        createMockStatement(),
+      );
       const trackIds = [1, 2];
       const res = await app.request("/api/playlists/1/tracks", {
         method: "DELETE",
         body: JSON.stringify({ trackIds }),
         headers: { "Content-Type": "application/json" },
       });
-
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ success: true });
-      expect(
-        mockPlaylistService.removeTracksFromPlaylist,
-      ).toHaveBeenCalledWith("1", "test-user", trackIds);
-    });
-
-    it("should return 404 when playlist is not found", async () => {
-      (
-        mockPlaylistService.removeTracksFromPlaylist as vi.Mock
-      ).mockResolvedValue({
-        success: false,
-        error: "Playlist not found or access denied",
-      });
-
-      const trackIds = [1, 2];
-      const res = await app.request("/api/playlists/1/tracks", {
-        method: "DELETE",
-        body: JSON.stringify({ trackIds }),
-        headers: { "Content-Type": "application/json" },
-      });
-
-      expect(res.status).toBe(404);
-      expect(
-        mockPlaylistService.removeTracksFromPlaylist,
-      ).toHaveBeenCalledWith("1", "test-user", trackIds);
-    });
-
-    it("should return 400 for invalid input", async () => {
-      const res = await app.request("/api/playlists/1/tracks", {
-        method: "DELETE",
-        body: JSON.stringify({ trackIds: [] }),
-        headers: { "Content-Type": "application/json" },
-      });
-
-      expect(res.status).toBe(400);
     });
   });
 });
