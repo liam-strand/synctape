@@ -4,6 +4,7 @@ import { handleShare } from "./api/share";
 import { handleCreate } from "./api/create";
 import { handleSync } from "./api/sync";
 import users from "./api/users";
+import playlists from "./api/playlists";
 import { authMiddleware } from "./utils/auth";
 import {
   handleSpotifyCallback,
@@ -11,16 +12,14 @@ import {
   handleSpotifyRedirect,
 } from "./api/spotify";
 
-// Define the Hono app
 const app = new Hono<{ Bindings: Env }>();
 
-// Setup CORS middleware
 app.use(
   "/api/*",
   cors({
     origin: "*",
     allowHeaders: ["Content-Type", "Authorization"],
-    allowMethods: ["POST", "GET", "OPTIONS"],
+    allowMethods: ["POST", "GET", "OPTIONS", "PATCH", "DELETE"],
   }),
 );
 
@@ -35,6 +34,8 @@ app.post("/api/sync", authMiddleware, (c) =>
   handleSync(c.req.raw, c.env, c.get("jwtPayload").userId),
 );
 app.route("/api/users", users);
+app.route("/api/playlists", playlists);
+
 app.get("/api/spotify/oauth-url", authMiddleware, handleSpotifyOAuthUrl);
 
 // OAuth entrypoints
@@ -54,10 +55,6 @@ app.get("/health", (c) => {
 export default {
   fetch: app.fetch,
 
-  /**
-   * Scheduled handler for periodic sync jobs
-   * Triggered by Cloudflare cron triggers
-   */
   async scheduled(
     controller: ScheduledController,
     env: Env,
@@ -77,7 +74,6 @@ export default {
 
       for (const playlist of results) {
         try {
-          // Create a mock request for handleSync
           const mockRequest = new Request(
             "https://synctape.ltrs.xyz/api/sync",
             {

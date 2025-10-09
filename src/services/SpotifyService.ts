@@ -72,11 +72,13 @@ export class SpotifyService implements StreamingService {
       name: playlistData.name,
       description: playlistData.description,
       tracks: tracks.map(({ track }) => ({
+        id: track.id,
         name: track.name,
         artist: track.artists.map((a) => a.name).join(", "),
         album: track.album.name,
         isrc: track.isrc,
         duration_ms: track.duration_ms,
+        image_url: track.album.images?.[0]?.url,
       })),
       updatedAt: new Date(), // Or parse from response if available
     };

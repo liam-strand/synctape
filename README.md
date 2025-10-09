@@ -106,6 +106,30 @@ Syncs a playlist across all linked streaming services.
 - Updates database
 - Propagates to all other services
 
+#### GET /api/playlists
+
+Lists all playlists for the authenticated user.
+
+#### GET /api/playlists/:id
+
+Gets the details for a specific playlist, including its tracks.
+
+#### PATCH /api/playlists/:id
+
+Updates a playlist's metadata (name and description).
+
+#### DELETE /api/playlists/:id
+
+Deletes a playlist.
+
+#### POST /api/playlists/:id/tracks
+
+Adds tracks to a playlist.
+
+#### DELETE /api/playlists/:id/tracks
+
+Removes tracks from a playlist.
+
 ### Cron Job
 
 The `/api/sync` endpoint is also triggered automatically every 30 minutes via Cloudflare Cron Triggers to keep playlists in sync.
@@ -117,6 +141,7 @@ src/
   index.ts                    # Main Worker entry point with routing
 
   services/
+    PlaylistService.ts        # Playlist CRUD and track management logic
     StreamingService.ts       # Interface definition
     SpotifyService.ts         # Spotify implementation (stubbed)
     AppleMusicService.ts      # Apple Music implementation (stubbed)
@@ -126,13 +151,14 @@ src/
     queries.ts               # D1 database query utilities
 
   api/
+    playlists.ts             # Playlist and track management endpoints
     share.ts                 # /api/share handler
     create.ts                # /api/create handler
     sync.ts                  # /api/sync handler
-  users.ts                 # /api/users auth handlers (login, refresh, profile)
+    users.ts                 # /api/users auth handlers (login, refresh, profile)
 
   utils/
-  auth.ts                  # JWT Authentication utilities and middleware
+    auth.ts                  # JWT Authentication utilities and middleware
     trackMatching.ts         # Track matching logic
     types.ts                 # Shared TypeScript types
 

@@ -1,18 +1,27 @@
 import { Track, TrackMetadata, StreamingServiceType } from "./types";
-import { Database } from "../db/queries";
+import {
+  findTrackByServiceIdQuery,
+  findTrackByIsrcQuery,
+  updateTrackServiceIdQuery,
+  insertTrackQuery,
+} from "../db/queries";
 
 /**
  * Match a track from service metadata to our database
  * Returns the track ID if found or creates a new track
  */
 export async function matchOrCreateTrack(
-  db: Database,
+  db: D1Database,
   trackMetadata: TrackMetadata,
   service: StreamingServiceType,
   serviceTrackId: string,
 ): Promise<number> {
   // Try to find by service-specific ID first
-  let track = await db.findTrackByServiceId(service, serviceTrackId);
+  let track = await findTrackByServiceIdQuery(
+    db,
+    service,
+    serviceTrackId,
+  ).first<Track>();
 
   if (track) {
     return track.id;
@@ -20,11 +29,16 @@ export async function matchOrCreateTrack(
 
   // Try to find by ISRC if available
   if (trackMetadata.isrc) {
-    track = await db.findTrackByIsrc(trackMetadata.isrc);
+    track = await findTrackByIsrcQuery(db, trackMetadata.isrc).first<Track>();
 
     if (track) {
       // Update the track with the service-specific ID
-      await db.updateTrackServiceId(track.id, service, serviceTrackId);
+      await updateTrackServiceIdQuery(
+        db,
+        track.id,
+        service,
+        serviceTrackId,
+      ).run();
       return track.id;
     }
   }
@@ -37,13 +51,19 @@ export async function matchOrCreateTrack(
     album: trackMetadata.album,
     isrc: trackMetadata.isrc,
     duration_ms: trackMetadata.duration_ms,
+    image_url: trackMetadata.image_url || null,
   };
 
   // Set the service-specific ID
   trackData[`${service}_id`] = serviceTrackId;
 
-  const trackId = await db.createTrack(trackData);
-  return trackId;
+  const newTrack = await insertTrackQuery(db, trackData).first<{
+    id: number;
+  }>();
+  if (!newTrack) {
+    throw new Error("Failed to create track");
+  }
+  return newTrack.id;
 }
 
 /**

@@ -3,11 +3,13 @@
 export type StreamingServiceType = "spotify" | "apple_music" | "youtube_music";
 
 export interface TrackMetadata {
+  id: string; // The service-specific track ID
   name: string;
   artist: string;
   album: string;
   isrc?: string;
   duration_ms?: number;
+  image_url?: string;
 }
 
 export interface PlaylistData {

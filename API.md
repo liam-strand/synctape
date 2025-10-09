@@ -483,32 +483,267 @@ Currently no rate limits are enforced on the Synctape API. Future versions will 
 
 ---
 
-## Future Endpoints (Planned)
-
-### GET /api/users
-
-List all users (admin only, future).
+## Playlist Management
 
 ### GET /api/playlists
 
 List all playlists for the authenticated user.
 
-### GET /api/playlist/:id
+**Request Headers:**
 
-Get details about a specific playlist.
+- `Authorization: Bearer <YOUR_JWT>`
 
-### DELETE /api/playlist/:id
+**Response (200 OK):**
 
-Delete a playlist (owner only).
+```typescript
+[
+  {
+    id: number;
+    name: string;
+    description: string | null;
+    image_url: string | null;
+    last_synced_at: number | null;
+  }
+]
+```
 
-### POST /api/playlist/:id/tracks
+**Error Responses:**
 
-Add tracks to a playlist.
+- `401 Unauthorized`: Missing or invalid JWT.
 
-### DELETE /api/playlist/:id/tracks
+**Example:**
 
-Remove tracks from a playlist.
+```bash
+curl https://synctape.ltrs.xyz/api/playlists \
+  -H "Authorization: Bearer <YOUR_JWT>"
+```
+
+---
+
+### GET /api/playlists/:id
+
+Get details for a specific playlist, including its tracks.
+
+**Request Headers:**
+
+- `Authorization: Bearer <YOUR_JWT>`
+
+**Response (200 OK):**
+
+```typescript
+{
+  id: number;
+  name: string;
+  description: string | null;
+  image_url: string | null;
+  last_synced_at: number | null;
+  tracks: [
+    {
+      id: number;
+      name: string;
+      artist: string;
+      album: string;
+      image_url: string | null;
+      duration_ms: number | null;
+    }
+  ]
+}
+```
+
+**Error Responses:**
+
+- `401 Unauthorized`: Missing or invalid JWT.
+- `404 Not Found`: Playlist not found or does not belong to the user.
+
+**Example:**
+
+```bash
+curl https://synctape.ltrs.xyz/api/playlists/42 \
+  -H "Authorization: Bearer <YOUR_JWT>"
+```
+
+---
+
+### PATCH /api/playlists/:id
+
+Update a playlist's metadata.
+
+**Request Headers:**
+
+- `Authorization: Bearer <YOUR_JWT>`
+
+**Request Body:**
+
+```typescript
+{
+  name: string;
+  description: string;
+}
+```
+
+**Response (200 OK):**
+
+```typescript
+{
+  success: true;
+}
+```
+
+**Error Responses:**
+
+- `400 Bad Request`: Missing `name` or `description`.
+- `401 Unauthorized`: Missing or invalid JWT.
+- `404 Not Found`: Playlist not found or does not belong to the user.
+
+**Example:**
+
+```bash
+curl -X PATCH https://synctape.ltrs.xyz/api/playlists/42 \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <YOUR_JWT>" \
+  -d '{
+    "name": "My Awesome New Playlist Name",
+    "description": "The best tracks ever."
+  }'
+```
+
+---
+
+### DELETE /api/playlists/:id
+
+Delete a playlist and all its associated data (owner only).
+
+**Request Headers:**
+
+- `Authorization: Bearer <YOUR_JWT>`
+
+**Response (200 OK):**
+
+```typescript
+{
+  success: true;
+}
+```
+
+**Error Responses:**
+
+- `401 Unauthorized`: Missing or invalid JWT.
+- `404 Not Found`: Playlist not found or does not belong to the user.
+
+**Example:**
+
+```bash
+curl -X DELETE https://synctape.ltrs.xyz/api/playlists/42 \
+  -H "Authorization: Bearer <YOUR_JWT>"
+```
+
+---
+
+### POST /api/playlists/:id/tracks
+
+Add one or more tracks to a playlist.
+
+**Request Headers:**
+
+- `Authorization: Bearer <YOUR_JWT>`
+
+**Request Body:**
+
+```typescript
+{
+  tracks: [
+    {
+      name: string;
+      artist: string;
+      album: string;
+      isrc: string; // Used to prevent duplicates
+      duration_ms: number;
+      image_url: string;
+      spotify_id?: string;
+    }
+  ]
+}
+```
+
+**Response (200 OK):**
+
+```typescript
+{
+  success: true;
+}
+```
+
+**Error Responses:**
+
+- `400 Bad Request`: Invalid or empty `tracks` array.
+- `401 Unauthorized`: Missing or invalid JWT.
+- `404 Not Found`: Playlist not found or does not belong to the user.
+
+**Example:**
+
+```bash
+curl -X POST https://synctape.ltrs.xyz/api/playlists/42/tracks \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <YOUR_JWT>" \
+  -d '{
+    "tracks": [
+      {
+        "name": "Never Gonna Give You Up",
+        "artist": "Rick Astley",
+        "album": "Whenever You Need Somebody",
+        "isrc": "GBAAA8700125",
+        "duration_ms": 213000,
+        "image_url": "https://i.scdn.co/image/ab67616d0000b2738a39e5a85b4e3c6b4e0e5a6b"
+      }
+    ]
+  }'
+```
+
+---
+
+### DELETE /api/playlists/:id/tracks
+
+Remove one or more tracks from a playlist.
+
+**Request Headers:**
+
+- `Authorization: Bearer <YOUR_JWT>`
+
+**Request Body:**
+
+```typescript
+{
+  trackIds: number[]; // Array of internal track IDs to remove
+}
+```
+
+**Response (200 OK):**
+
+```typescript
+{
+  success: true;
+}
+```
+
+**Error Responses:**
+
+- `400 Bad Request`: Invalid or empty `trackIds` array.
+- `401 Unauthorized`: Missing or invalid JWT.
+- `404 Not Found`: Playlist not found or does not belong to the user.
+
+**Example:**
+
+```bash
+curl -X DELETE https://synctape.ltrs.xyz/api/playlists/42/tracks \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <YOUR_JWT>" \
+  -d '{
+    "trackIds": [101, 102]
+  }'
+```
+
+---
 
 ### GET /api/search
 
-Search for tracks across services.
+Search for tracks across services (Planned).

@@ -13,7 +13,7 @@ const createFetchResponse = (data: any, ok = true, status = 200) => {
     ok,
     status,
     json: () => Promise.resolve(data),
-    headers: new Headers(status === 429 ? { "Retry-After": "1" } : {}),
+    headers: status === 429 ? { "Retry-After": "1" } : {},
   });
 };
 
