@@ -1,5 +1,11 @@
 {
   "compatibility_date": "2025-04-01",
+  "compatibility_flags": [
+    "nodejs_als"
+  ],
+  "version_metadata": {
+    "binding": "CF_VERSION_METADATA"
+  },
   "main": "src/index.ts",
   "name": "synctape",
   "upload_source_maps": true,
@@ -8,6 +14,12 @@
       "binding": "DB",
       "database_id": "c6b989d1-c5f2-4151-8808-4fd833e9d22d",
       "database_name": "synctape-database"
+    }
+  ],
+  "analytics_engine_datasets": [
+    {
+      "binding": "ANALYTICS",
+      "dataset": "synctape_events"
     }
   ],
   "observability": {

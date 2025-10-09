@@ -231,7 +231,66 @@ Synctape now supports connecting Spotify accounts through the Worker. Configure 
 3. The Worker forwards the user to Spotify's consent screen and handles the `/auth/spotify/callback` exchange.
 4. Access and refresh tokens are stored in `user_streaming_accounts`. Tokens are automatically refreshed on demand when other APIs ask for Spotify access.
 
-If the optional `returnTo` parameter is omitted, the user is redirected to `/connect/spotify/success` on the Worker origin once the flow completes. The Spotify developer dashboard must list `https://synctape.ltrs.xyz/auth/spotify/callback` as an allowed redirect URI.
+If the optional `returnTo` parameter is omitted, a user is redirected to `/connect/spotify/success` on the Worker origin once the flow completes. The Spotify developer dashboard must list `https://synctape.ltrs.xyz/auth/spotify/callback` as an allowed redirect URI.
+
+## Monitoring
+
+This project is configured with error tracking, custom metrics, and health checks to ensure reliability.
+
+### Error Tracking with Sentry
+
+Unhandled exceptions and manually captured errors are sent to Sentry. To enable this, you need to configure your Sentry DSN as a secret in your Cloudflare Worker.
+
+```bash
+pnpm wrangler secret put SENTRY_DSN
+```
+
+You will be prompted to enter the DSN value from your Sentry project settings.
+
+**Alerting:**
+To receive notifications for new or frequent errors, configure alert rules in your Sentry project dashboard under **Alerts**. You can create rules based on the number of events, the number of affected users, or other criteria.
+
+### Custom Metrics with Cloudflare Analytics Engine
+
+The application sends custom metrics to a Cloudflare Analytics Engine dataset named `synctape_events`. The following metrics are recorded:
+
+- `playlist_sync_scheduled_success`: The number of playlists successfully synced by the scheduled job.
+- `playlist_sync_scheduled_failure`: The number of playlists that failed to sync during the scheduled job.
+- `playlist_sync_scheduled_job_error`: Triggered if the scheduled job itself encounters a critical error.
+
+The dataset is configured in `wrangler.jsonc`. No additional setup is required for the metrics to be collected.
+
+**Dashboards and Alerting:**
+You can query and visualize these metrics in the Cloudflare dashboard under **Workers & Pages > Analytics Engine**. You can also create notifications from Analytics Engine to receive alerts when metrics cross a certain threshold.
+
+### Health Checks
+
+The `/health` endpoint provides a detailed status of the service's health, including database and Spotify API connectivity.
+
+- **URL:** `GET /health`
+- **Success Response (200 OK):**
+  ```json
+  {
+    "status": "ok",
+    "checks": {
+      "db": "ok",
+      "spotify": "ok"
+    }
+  }
+  ```
+- **Failure Response (503 Service Unavailable):**
+  ```json
+  {
+    "status": "error",
+    "checks": {
+      "db": "ok",
+      "spotify": "Spotify API returned status 500"
+    }
+  }
+  ```
+
+**Alerting:**
+You can set up a Cloudflare Health Check to monitor this endpoint and receive notifications if it becomes unhealthy. Configure this in the Cloudflare dashboard under **Traffic > Health Checks**.
 
 ## TODO / Stubbed Features
 
