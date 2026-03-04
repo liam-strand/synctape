@@ -34,6 +34,6 @@
   },
   "dependencies": {
     "@sentry/cloudflare": "^10.19.0",
-    "hono": "^4.9.10"
+    "hono": "^4.12.4"
   }
 }
